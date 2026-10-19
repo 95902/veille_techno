@@ -11,6 +11,10 @@ use Illuminate\Auth\Access\Response;
  */
 class UserPolicy
 {
+    public const LAST_ADMIN_DELETE_MESSAGE = 'Le dernier administrateur ne peut pas être supprimé.';
+
+    public const LAST_ADMIN_DEMOTE_MESSAGE = 'Le dernier administrateur ne peut pas être rétrogradé.';
+
     public function viewAny(User $user): bool
     {
         return $user->is_admin;
@@ -42,7 +46,7 @@ class UserPolicy
         }
 
         if ($model->isLastAdmin()) {
-            return Response::deny('Le dernier administrateur ne peut pas être supprimé.');
+            return Response::deny(self::LAST_ADMIN_DELETE_MESSAGE);
         }
 
         return Response::allow();
@@ -79,19 +83,9 @@ class UserPolicy
         }
 
         if ($model->isLastAdmin()) {
-            return Response::deny('Le dernier administrateur ne peut pas être rétrogradé.');
+            return Response::deny(self::LAST_ADMIN_DEMOTE_MESSAGE);
         }
 
         return Response::allow();
-    }
-
-    public function restore(User $user, User $model): bool
-    {
-        return false;
-    }
-
-    public function forceDelete(User $user, User $model): bool
-    {
-        return false;
     }
 }

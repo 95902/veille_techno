@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Users\Pages;
 
+use App\Filament\Resources\Users\Schemas\UserForm;
 use App\Filament\Resources\Users\UserResource;
 use App\Models\User;
 use Filament\Actions\DeleteAction;
@@ -17,9 +18,7 @@ class EditUser extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            DeleteAction::make()
-                ->label('Supprimer')
-                ->modalHeading('Supprimer l\'utilisateur'),
+            DeleteAction::make(),
         ];
     }
 
@@ -33,7 +32,7 @@ class EditUser extends EditRecord
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
         $record->name = $data['name'];
-        $record->email = $data['email'];
+        $record->email = UserForm::normalizeEmail($data['email']);
 
         if (array_key_exists('is_admin', $data)) {
             $isAdmin = (bool) $data['is_admin'];

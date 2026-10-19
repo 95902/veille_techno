@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Users\Pages;
 
+use App\Filament\Resources\Users\Schemas\UserForm;
 use App\Filament\Resources\Users\UserResource;
 use App\Models\User;
 use Filament\Resources\Pages\CreateRecord;
@@ -22,7 +23,7 @@ class CreateUser extends CreateRecord
     {
         $user = new User([
             'name' => $data['name'],
-            'email' => $data['email'],
+            'email' => UserForm::normalizeEmail($data['email']),
             'password' => Str::password(64),
         ]);
         $user->email_verified_at = now();

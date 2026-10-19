@@ -36,8 +36,7 @@ class UsersTable
             ])
             ->defaultSort('name')
             ->recordActions([
-                EditAction::make()
-                    ->label('Modifier'),
+                EditAction::make(),
                 Action::make('sendPasswordLink')
                     ->label('Renvoyer le lien')
                     ->icon(Heroicon::OutlinedEnvelope)
@@ -45,9 +44,7 @@ class UsersTable
                     ->modalHeading('Renvoyer le lien de définition du mot de passe')
                     ->modalSubmitActionLabel('Envoyer')
                     ->action(fn (User $record) => UserResource::sendPasswordSetupLink($record)),
-                DeleteAction::make()
-                    ->label('Supprimer')
-                    ->modalHeading('Supprimer l\'utilisateur'),
+                DeleteAction::make(),
             ]);
     }
 }

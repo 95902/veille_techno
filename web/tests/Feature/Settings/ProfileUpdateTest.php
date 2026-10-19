@@ -34,6 +34,27 @@ test('profile information can be updated', function () {
     expect($user->email_verified_at)->toBeNull();
 });
 
+test('a mixed-case email is stored lowercase and checked for uniqueness case-insensitively', function () {
+    User::factory()->create(['email' => 'pris@example.com']);
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->patch(route('profile.update'), [
+            'name' => 'Test User',
+            'email' => 'Pris@Example.COM',
+        ])
+        ->assertSessionHasErrors('email');
+
+    $this->actingAs($user)
+        ->patch(route('profile.update'), [
+            'name' => 'Test User',
+            'email' => 'Prenom.Nom@Innosys.FR',
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect($user->refresh()->email)->toBe('prenom.nom@innosys.fr');
+});
+
 test('email verification status is unchanged when the email address is unchanged', function () {
     $user = User::factory()->create();
 

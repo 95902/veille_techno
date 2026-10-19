@@ -70,3 +70,58 @@ test('it refuses a mismatched password confirmation and writes nothing', functio
 
     expect(User::count())->toBe(0);
 });
+
+test('it stores a mixed-case email lowercase on creation', function () {
+    $this->artisan('veille:make-admin')
+        ->expectsQuestion('Adresse e-mail', 'Prenom.Nom@Innosys.FR')
+        ->expectsQuestion('Nom', 'Admin')
+        ->expectsQuestion('Mot de passe', 'secret-password')
+        ->expectsQuestion('Confirmez le mot de passe', 'secret-password')
+        ->assertSuccessful();
+
+    expect(User::sole()->email)->toBe('prenom.nom@innosys.fr');
+
+    $this->post(route('login.store'), [
+        'email' => 'Prenom.Nom@Innosys.FR',
+        'password' => 'secret-password',
+    ])->assertRedirect(route('dashboard', absolute: false));
+
+    $this->assertAuthenticatedAs(User::sole());
+});
+
+test('it promotes an existing lowercase account given a mixed-case email', function () {
+    $user = User::factory()->create(['email' => 'prenom.nom@innosys.fr']);
+
+    $this->artisan('veille:make-admin')
+        ->expectsQuestion('Adresse e-mail', 'Prenom.Nom@Innosys.FR')
+        ->assertSuccessful();
+
+    expect(User::count())->toBe(1)
+        ->and($user->refresh()->is_admin)->toBeTrue();
+});
+
+test('it verifies an unverified account it promotes', function () {
+    $user = User::factory()->unverified()->create(['email' => 'collab@example.com']);
+
+    $this->artisan('veille:make-admin')
+        ->expectsQuestion('Adresse e-mail', 'collab@example.com')
+        ->assertSuccessful();
+
+    $user->refresh();
+
+    expect($user->is_admin)->toBeTrue()
+        ->and($user->email_verified_at)->not->toBeNull();
+
+    $this->actingAs($user)->get('/admin')->assertOk();
+});
+
+test('it keeps the existing verification date when promoting a verified account', function () {
+    $verifiedAt = now()->subYear()->startOfSecond();
+    $user = User::factory()->create(['email' => 'collab@example.com', 'email_verified_at' => $verifiedAt]);
+
+    $this->artisan('veille:make-admin')
+        ->expectsQuestion('Adresse e-mail', 'collab@example.com')
+        ->assertSuccessful();
+
+    expect($user->refresh()->email_verified_at->equalTo($verifiedAt))->toBeTrue();
+});

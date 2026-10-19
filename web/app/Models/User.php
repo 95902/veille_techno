@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Policies\UserPolicy;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -63,14 +64,16 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, Pas
     }
 
     /**
-     * Enforce the last-admin invariant on every write path, UI or not.
+     * Safety net for the last-admin invariant on every write path, UI or not.
+     * UserPolicy stays the primary guard (and owns the messages); this only
+     * catches writes that bypass it, such as tinker or a future command.
      */
     protected static function booted(): void
     {
         static::updating(function (User $user): void {
             if ($user->isDirty('is_admin') && ! $user->is_admin && $user->isLastAdmin()) {
                 throw ValidationException::withMessages([
-                    'is_admin' => 'Le dernier administrateur ne peut pas être rétrogradé.',
+                    'is_admin' => UserPolicy::LAST_ADMIN_DEMOTE_MESSAGE,
                 ]);
             }
         });
@@ -78,7 +81,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, Pas
         static::deleting(function (User $user): void {
             if ($user->isLastAdmin()) {
                 throw ValidationException::withMessages([
-                    'is_admin' => 'Le dernier administrateur ne peut pas être supprimé.',
+                    'is_admin' => UserPolicy::LAST_ADMIN_DELETE_MESSAGE,
                 ]);
             }
         });

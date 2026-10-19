@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 
 use function Laravel\Prompts\password;
@@ -20,16 +21,19 @@ class MakeAdmin extends Command
      */
     public function handle(): int
     {
-        $email = text(
+        // Fortify lowercases e-mails at login and password reset: store them lowercase.
+        $email = Str::lower(trim(text(
             label: 'Adresse e-mail',
             required: true,
             validate: ['email' => ['required', 'string', 'email', 'max:255']],
-        );
+        )));
 
         $existing = User::where('email', $email)->first();
 
         if ($existing !== null) {
             $existing->is_admin = true;
+            // The operator vouches for the address, as for a created admin.
+            $existing->email_verified_at ??= now();
             $existing->save();
 
             $this->components->info("Le compte existant {$email} est maintenant administrateur (mot de passe inchangé).");
