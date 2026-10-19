@@ -140,8 +140,8 @@ def collect_source(
             skip(str(exc), entry.url)
             continue
         if not (url_fits(entry.url) and url_fits(normalized)):
-            # Plus longue que la colonne : l'INSERT échouerait et interromprait la collecte.
-            skip(f"URL de plus de {URL_MAX_BYTES} caractères", entry.url)
+            # Trop longue pour la colonne ou son index unique : l'INSERT interromprait la collecte.
+            skip(f"URL de plus de {URL_MAX_BYTES} octets", entry.url)
             continue
         by_url.setdefault(normalized, entry)
     known = repo.known_urls(list(by_url))
