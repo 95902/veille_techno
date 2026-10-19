@@ -46,23 +46,39 @@ def fetch_feed(url: str, client: httpx.Client) -> list[FeedEntry]:
     return sorted(entries, key=lambda e: e.published_at or undated, reverse=True)
 
 
+# Passages suivants : entrées non datées admises au plus par ce nombre par source et par
+# passage (les premières du flux), sinon un flux sans dates à longue archive serait importé
+# par tranches de `max_items_per_run` chaque jour.
+MAX_UNDATED_PER_RUN = 3
+
+
 def recent_entries(
-    entries: list[FeedEntry], *, first_run: bool, days: int, now: datetime
+    entries: list[FeedEntry],
+    *,
+    first_run: bool,
+    days: int,
+    now: datetime,
+    max_undated: int = MAX_UNDATED_PER_RUN,
 ) -> list[FeedEntry]:
     """Entrées des `days` derniers jours.
 
     Premier passage d'une source : seulement des entrées datées de la fenêtre. Passages
-    suivants : les entrées non datées sont gardées (le dédoublonnage les filtre), les entrées
-    datées d'avant la fenêtre restent ignorées, sinon chaque passage importerait l'archive
-    du flux (OpenAI en publie plus de 1 000) par tranches de `max_items_per_run`.
+    suivants : s'y ajoutent les `max_undated` premières entrées non datées du flux (ordre du
+    flux, avant dédoublonnage : déjà connues, elles ne laissent pas passer l'archive). Les
+    entrées datées d'avant la fenêtre restent ignorées, sinon chaque passage importerait
+    l'archive du flux (OpenAI en publie plus de 1 000) par tranches de `max_items_per_run`.
     """
     cutoff = now - timedelta(days=days)
-    return [
-        e
-        for e in entries
-        if (e.published_at is None and not first_run)
-        or (e.published_at is not None and e.published_at >= cutoff)
-    ]
+    kept: list[FeedEntry] = []
+    undated = 0
+    for e in entries:
+        if e.published_at is not None:
+            if e.published_at >= cutoff:
+                kept.append(e)
+        elif not first_run and undated < max_undated:
+            undated += 1
+            kept.append(e)
+    return kept
 
 
 def _to_entry(raw: Any) -> FeedEntry | None:

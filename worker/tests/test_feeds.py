@@ -82,3 +82,19 @@ def test_unreachable_feed_raises_feed_error():
 def test_html_page_is_not_a_feed():
     with pytest.raises(FeedError, match="invalide"):
         fetch_feed(RSS, http_client({RSS: fixture("article.html")}))
+
+
+def test_later_runs_keep_at_most_three_undated_entries():
+    items = "".join(
+        f"<item><title>Undated {i}</title><link>https://undated.example/p/{i}</link></item>"
+        for i in range(50)
+    )
+    feed = f'<?xml version="1.0"?><rss version="2.0"><channel><title>U</title>{items}' \
+        "</channel></rss>"
+    entries = fetch_feed(RSS, http_client({RSS: feed.encode()}))
+    assert len(entries) == 50
+
+    later = recent_entries(entries, first_run=False, days=7, now=NOW)
+
+    assert [e.title for e in later] == ["Undated 0", "Undated 1", "Undated 2"]
+    assert recent_entries(entries, first_run=True, days=7, now=NOW) == []
