@@ -1,5 +1,5 @@
 #!/bin/bash
-# Crée les rôles applicatifs et l'extension unaccent dans la base $POSTGRES_DB.
+# Crée les rôles applicatifs, l'extension unaccent dans la base $POSTGRES_DB et la base de test veille_test.
 # Exécuté une seule fois par l'image postgres, au premier démarrage (volume vide).
 set -euo pipefail
 
@@ -32,4 +32,6 @@ GRANT USAGE ON SCHEMA public TO veille_worker;
 
 -- Recherche plein texte sans accents.
 CREATE EXTENSION IF NOT EXISTS unaccent;
+
+-- Base des tests Pest du groupe pgsql (RefreshDatabase la vide) : jamais la base de l'app.CREATE DATABASE veille_test OWNER veille_app;
 SQL

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\ArticleStatus;
 use Database\Factories\ArticleFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -69,5 +70,50 @@ class Article extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    /**
+     * Articles ready to read: the worker has written their summary and category.
+     *
+     * @param  Builder<Article>  $query
+     */
+    public function scopeSummarized(Builder $query): void
+    {
+        $query->where('status', ArticleStatus::Summarized);
+    }
+
+    /**
+     * Articles of the category with this slug; no filter when the slug is empty.
+     *
+     * @param  Builder<Article>  $query
+     */
+    public function scopeInCategory(Builder $query, ?string $slug): void
+    {
+        if ($slug === null || $slug === '') {
+            return;
+        }
+
+        $query->whereHas('category', fn (Builder $category) => $category->where('slug', $slug));
+    }
+
+    /**
+     * Full-text search (PostgreSQL only, search_vector), most relevant first; then, and
+     * alone without a query, most recent first: publication date, undated last, then
+     * collection date.
+     *
+     * @param  Builder<Article>  $query
+     */
+    public function scopeSearch(Builder $query, ?string $terms): void
+    {
+        $terms = trim((string) $terms);
+
+        if ($terms !== '') {
+            $query->whereRaw("search_vector @@ websearch_to_tsquery('fr_unaccent', ?)", [$terms])
+                ->orderByRaw("ts_rank(search_vector, websearch_to_tsquery('fr_unaccent', ?)) DESC", [$terms]);
+        }
+
+        $query->orderByRaw('published_at DESC NULLS LAST')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
     }
 }

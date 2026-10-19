@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Pgsql\PgsqlTestCase;
 use Tests\TestCase;
 
 /*
@@ -17,6 +18,12 @@ use Tests\TestCase;
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
     ->in('Feature');
+
+// PostgreSQL-only SQL (full-text search), on the dedicated veille_test database.
+pest()->extend(PgsqlTestCase::class)
+    ->use(RefreshDatabase::class)
+    ->group('pgsql')
+    ->in('Pgsql');
 
 /*
 |--------------------------------------------------------------------------

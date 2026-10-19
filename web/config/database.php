@@ -101,6 +101,23 @@ return [
             'worker_role' => env('DB_WORKER_ROLE', 'veille_worker'),
         ],
 
+        // Pest group "pgsql" only (RefreshDatabase wipes it): same server and role as pgsql,
+        // dedicated database, never the application database. No DB_URL: it would override it.
+        'pgsql_testing' => [
+            'driver' => 'pgsql',
+            'host' => env('DB_HOST', 'postgres'),
+            'port' => env('DB_PORT', '5432'),
+            'database' => env('DB_TEST_DATABASE', 'veille_test'),
+            'username' => env('DB_USERNAME', 'veille_app'),
+            'password' => env('DB_PASSWORD', ''),
+            'charset' => env('DB_CHARSET', 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => env('DB_SSLMODE', 'prefer'),
+            'worker_role' => env('DB_WORKER_ROLE', 'veille_worker'),
+        ],
+
         'sqlsrv' => [
             'driver' => 'sqlsrv',
             'url' => env('DB_URL'),
