@@ -1,6 +1,6 @@
 ---
 objective: "docker compose up démarre nginx, app, postgres, vllm et worker-py, et le worker obtient de vLLM un résumé en français sur la RTX 5070."
-status: pending
+status: implemented
 ---
 
 # Plan: Socle technique
