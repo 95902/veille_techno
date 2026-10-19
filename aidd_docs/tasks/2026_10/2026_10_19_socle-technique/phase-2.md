@@ -82,6 +82,12 @@ journey
 1. `Dockerfile` : python 3.12 slim, uv, `uv sync --frozen --no-dev`.
 2. Service `worker-py` : `env_file`, `VLLM_BASE_URL=http://vllm:8000/v1`, `depends_on` vllm healthy et postgres healthy, sans commande longue (lancé à la demande).
 
+## Amendement 2026-10-19
+
+- Tâche 4.2 : plus d'`env_file` ; `worker-py` reçoit une liste `environment:` explicite (`VLLM_MODEL`, `VLLM_BASE_URL`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME=veille_worker`, `WORKER_DB_PASSWORD`), sans mot de passe superutilisateur, ni de `veille_app`, ni `APP_KEY`.
+- Service dans le profil Compose `tools` : `docker compose up` ne le démarre pas ; `docker compose run --rm worker-py ...` le lance à la demande.
+- `llm.py` traduit aussi `openai.APIError` (modèle non servi, erreur HTTP) en `LLMUnavailableError`.
+
 ## Test acceptance criteria
 
 | Task | Acceptance criteria |

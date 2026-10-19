@@ -38,3 +38,11 @@ status: implemented
 | Cache de modèles externe (`agent-editorial_vllm_hf_cache`), monté en lecture seule, `HF_HUB_OFFLINE=1` | aucun téléchargement, aucune écriture dans le volume d'un autre projet |
 | vLLM exposé sur `127.0.0.1:8000` uniquement | l'API n'a pas d'authentification |
 | Thinking Qwen3 désactivé par requête | un résumé n'a pas besoin de raisonnement, et le raisonnement multiplie la latence et les tokens |
+
+## Amendement 2026-10-19
+
+Le contrat amendé (`contract.md`, Périmètre et Décisions) remplace deux éléments ci-dessus ; les lignes d'origine restent pour l'historique.
+
+- Modèle : `Qwen/Qwen3-8B-AWQ` au lieu de `Qwen/Qwen3-14B-AWQ` (OOM à la conversion AWQ sur 12 Go) ; repli `Qwen/Qwen3-4B` par `.env`.
+- Cache : volume nommé `hf_cache` propre au projet, en lecture-écriture, au lieu du volume externe `agent-editorial_vllm_hf_cache` en lecture seule. Le premier démarrage télécharge le modèle ; `HF_HUB_OFFLINE` est réglable par `VLLM_HF_HUB_OFFLINE` (`0` au premier démarrage, `1` ensuite).
+- `worker-py` est dans le profil Compose `tools` : `docker compose up` démarre nginx, app, postgres et vllm ; le worker se lance à la demande par `docker compose run --rm worker-py ...`.

@@ -19,6 +19,6 @@ flowchart TD
 
 ## Entry points
 
-- `docker-compose.yml` à la racine : démarre tous les services.
+- `docker-compose.yml` à la racine : `docker compose up -d` démarre nginx, app, postgres et vllm ; `worker-py` (profil `tools`) se lance à la demande avec `docker compose run --rm worker-py ...`.
 - `web/routes/web.php` (pages) et `web/routes/console.php` (scheduler du digest).
 - Le module de collecte du worker, lancé une fois par jour par cron dans son conteneur.

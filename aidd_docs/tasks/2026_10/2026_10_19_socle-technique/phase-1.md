@@ -82,6 +82,15 @@ journey
 5. Ports `127.0.0.1:8000:8000`, `ipc: host` (ou `shm_size`), healthcheck sur `/health` avec `start_period` long (chargement du modèle).
 6. `infra/vllm/README.md` : image et digest, modèle, paramètres, repli Qwen3-4B, désactivation du thinking par requête.
 
+## Amendement 2026-10-19
+
+Suit le contrat amendé ; les tâches ci-dessus gardent la rédaction d'origine.
+
+- Tâche 1.2 et parcours de test : `VLLM_MODEL=Qwen/Qwen3-8B-AWQ` ; `/v1/models` liste `Qwen/Qwen3-8B-AWQ` (et non `Qwen3-14B-AWQ`, OOM sur la RTX 5070).
+- Tâche 3.4 : volume nommé `hf_cache` propre au projet, en lecture-écriture sur `/root/.cache/huggingface`, au lieu du volume externe `agent-editorial_vllm_hf_cache` en lecture seule. `HF_HUB_OFFLINE` vient de `VLLM_HF_HUB_OFFLINE` (`0` par défaut : le premier démarrage télécharge le modèle ; `1` une fois en cache).
+- Critère 3 : « sans téléchargement » ne vaut qu'une fois le modèle en cache ; le premier démarrage télécharge.
+- Tâche 2.1 : healthcheck `pg_isready -h 127.0.0.1` (TCP), qui ne passe qu'après les scripts d'init ; `TEMPORARY` retiré à `PUBLIC` dans `01-roles.sh`.
+
 ## Test acceptance criteria
 
 | Task | Acceptance criteria |

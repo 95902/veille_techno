@@ -18,3 +18,4 @@ Stratégie prévue ; aucun test n'existe encore. Commandes : `coding-assertions.
 - Tests Laravel dans `web/tests/`, tests worker dans `worker/tests/`.
 - Les tests lents ou dépendant de vLLM sont regroupés (`slow`) et exclus du gate avant commit.
 - Les fixtures RSS et HTML sont des fichiers figés, jamais des appels réseau réels.
+- Pest tourne dans le conteneur `app`, où compose injecte la vraie base : `web/phpunit.xml` force (`force="true"`) `APP_ENV=testing` et SQLite en mémoire. Sans ça, `RefreshDatabase` vide la base `veille`.
