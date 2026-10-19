@@ -1,0 +1,19 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<rss xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0">
+  <channel>
+    <title>cs.CL updates on arXiv.org</title>
+    <link>http://rss.arxiv.org/rss/cs.CL</link>
+    <description>cs.CL updates on the arXiv.org e-print archive.</description>
+    <item>
+      <title>Sparse Attention for Long-Context Summarization</title>
+      <link>https://arxiv.org/abs/2610.11111</link>
+      <description>arXiv:2610.11111v1 Announce Type: new 
+Abstract: We propose a sparse attention mechanism that reduces the memory cost of long-context summarization by 60 percent while matching the ROUGE scores of dense attention on three benchmarks.</description>
+      <guid isPermaLink="false">oai:arXiv.org:2610.11111v1</guid>
+      <category>cs.CL</category>
+      <pubDate>Mon, 19 Oct 2026 00:00:00 -0400</pubDate>
+      <arxiv:announce_type>new</arxiv:announce_type>
+      <dc:creator>A. Author, B. Author</dc:creator>
+    </item>
+  </channel>
+</rss>
