@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 ---
 
 # Instruction: Pipeline worker (flux, extraction, vLLM, écriture)

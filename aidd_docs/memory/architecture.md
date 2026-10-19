@@ -1,6 +1,6 @@
 # Architecture
 
-Cible décidée dans `aidd_docs/INSTALL.md` ; aucun code n'existe encore.
+Cible décidée dans `aidd_docs/INSTALL.md`. En place : comptes et back-office Filament (utilisateurs, sources, catégories), collecte et résumé par le worker.
 
 ## Stack
 
@@ -24,10 +24,30 @@ flowchart LR
   web -->|digest hebdo| out[SMTP · Slack]
 ```
 
+## Collecte (worker)
+
+```mermaid
+flowchart LR
+  cron["worker-cron · supercronic<br/>COLLECT_SCHEDULE, 6 h Paris"] --> collect["veille_worker.collect"]
+  collect -->|sources actives| feeds[Flux RSS/Atom]
+  feeds -->|URL normalisée inconnue| pending[(article pending)]
+  pending -->|trafilatura, repli flux, arXiv = résumé du flux| text[texte tronqué]
+  text -->|JSON imposé| vllm[vLLM]
+  vllm --> done[(summarized / failed)]
+```
+
+- Fenêtre de 7 jours : au premier passage d'une source, seules les entrées datées de la fenêtre ; ensuite les entrées non datées s'y ajoutent, l'archive du flux n'est jamais importée. Plafond `sources.max_items_per_run` de nouveaux articles par passage (20 par défaut, 10 pour arXiv).
+- Dédoublonnage par `articles.normalized_url` (unique) : sans `utm_*` ni fragment, schéma et hôte en minuscules.
+- Sortie structurée vLLM (`response_format` `json_schema`, API OpenAI) : `title_fr`, `summary` tableau de exactement 3 phrases, `category` en `enum` des slugs lus en base. Revalidée en Python ; hors schéma → `failed`.
+- Résumé stocké en 3 lignes (une phrase par ligne) dans `articles.summary`.
+- Retentatives : `pending` et `failed` avec `attempts < 3` repassent à chaque collecte. vLLM injoignable : collecte interrompue, code de sortie 1, l'article courant n'est pas compté comme essai.
+- Une source en erreur (HTTP, réseau, flux invalide) est notée au bilan sans bloquer les autres.
+
 ## Key decisions
 
 - Laravel est le seul propriétaire du schéma : toutes les migrations sont dans `web/`. Le worker n'a ni ORM migrant ni Alembic.
 - Le worker se connecte avec un rôle Postgres sans DDL et écrit en SQL brut (psycopg 3).
+- Droits du rôle worker (`veille_worker`, configurable par `DB_WORKER_ROLE`) : accordés par une migration Laravel, explicites table par table (SELECT `sources`/`categories`, SELECT/INSERT/UPDATE `articles` et sa séquence), jamais par privilèges par défaut. Le script d'init Postgres ne donne que CONNECT et USAGE sur le schéma ; toute nouvelle table lue ou écrite par le worker exige un GRANT dans une migration.
 - Contrat Python → Laravel par la base : un statut d'article (`pending` → `summarized`), aucune logique métier ni d'affichage dans le worker.
 - Un seul appel LLM par article ; le résultat est stocké, jamais régénéré à l'affichage.
 - Pas de front découplé : Inertia plutôt qu'une SPA + API, gain nul à 10 utilisateurs.
