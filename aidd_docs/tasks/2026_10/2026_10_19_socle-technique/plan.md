@@ -1,5 +1,5 @@
 ---
-objective: "docker compose up démarre nginx, app, postgres, vllm et worker-py, et le worker obtient de vLLM un résumé en français sur la RTX 5070."
+objective: "docker compose up démarre nginx, app, postgres et vllm, et le worker (lancé à la demande) obtient de vLLM un résumé en français sur la RTX 5070."
 status: implemented
 ---
 
@@ -41,7 +41,7 @@ status: implemented
 
 ## Amendement 2026-10-19
 
-Le contrat amendé (`contract.md`, Périmètre et Décisions) remplace deux éléments ci-dessus ; les lignes d'origine restent pour l'historique.
+Le contrat amendé (`contract.md`, Périmètre et Décisions) remplace plusieurs éléments ci-dessus ; les lignes d'origine restent pour l'historique.
 
 - Modèle : `Qwen/Qwen3-8B-AWQ` au lieu de `Qwen/Qwen3-14B-AWQ` (OOM à la conversion AWQ sur 12 Go) ; repli `Qwen/Qwen3-4B` par `.env`.
 - Cache : volume nommé `hf_cache` propre au projet, en lecture-écriture, au lieu du volume externe `agent-editorial_vllm_hf_cache` en lecture seule. Le premier démarrage télécharge le modèle ; `HF_HUB_OFFLINE` est réglable par `VLLM_HF_HUB_OFFLINE` (`0` au premier démarrage, `1` ensuite).

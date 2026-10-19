@@ -1,6 +1,6 @@
 # Review: socle technique
 
-- Rounds: 1
+- Rounds: 2
 - Started: 2026-10-19
 
 ## Round 1 · r-2976
@@ -38,3 +38,33 @@
 - `web/.github/workflows/tests.yml:1` : CI et dependabot du starter kit inertes dans un sous-dossier ; `web/pnpm-workspace.yaml` à côté de `package-lock.json` ; `CreateNewUser` toujours câblé (`FortifyServiceProvider.php:43`) alors que l'inscription est désactivée → supprimer `web/.github/` et `pnpm-workspace.yaml`, garder `CreateNewUser` seulement s'il sert au futur ticket comptes — 🟢 minor, rot
 - `web/.env.example:23-29` : paramètres `DB_*` dupliqués avec `docker-compose.yml:23-28`, qui prime ; deux sources pour la même valeur → garder une seule source canonique (compose) et réduire `web/.env.example` à un renvoi — 🟢 minor, rot
 - `web/tests/Feature/Auth/RegistrationTest.php:1` : aucun test ne couvre `/admin/login` ni `/` (critère 5 du contrat), et `phpunit.xml:26-27` force SQLite, donc aucun test ne touche PostgreSQL → ajouter `get('/admin/login')->assertOk()` et `get('/')->assertOk()`, et joindre la sortie `curl` des deux pages — 🟢 minor, standards
+
+## Round 2 · r-7c41
+
+- Date: 2026-10-19
+- By: 95902
+- Diff: `main...feat/socle-technique`
+- Axes: code, functional, relevancy
+- Verdict: approve
+- Score: 11/11 met, 0 unmet, 0 unverified at runtime, 0 out of the diff
+
+### Criteria
+
+- [x] Phase 1 / T1 : `.env` non suivi ; chaque variable de `.env.example` commentée — `.env.example:1-45` (dont `APP_ENV`/`APP_DEBUG` commentés, l.37-41) ; `.env` absent de `git ls-files`
+- [x] Phase 1 / T2 : postgres healthy, `unaccent`, `CREATE TABLE` refusé à `veille_worker` — `evidence.md` b, b', f (`permission denied for schema public`, `CREATE TEMP TABLE` refusé) ; `infra/postgres/init/01-roles.sh:19-36`
+- [x] Phase 1 / T3 : vllm healthy, `/v1/models` liste le modèle de `.env`, port 8000 sur 127.0.0.1 — `evidence.md` b, c (`['Qwen/Qwen3-8B-AWQ']`, `127.0.0.1:8000`) à `VLLM_GPU_MEMORY_UTILIZATION=0.80`, valeur désormais par défaut (`.env.example:26`) ; « sans téléchargement » amendé (`phase-1.md` Amendement)
+- [x] Phase 2 / T1 : `uv sync` installe, `uv run pytest` découvre les tests — rejoué : `uv run ruff check .` → `All checks passed!`, `uv run pytest` → 4 passed, 1 failed (test `slow`, vLLM arrêté, attendu ; `evidence.md` h : 5 passed avec vLLM)
+- [x] Phase 2 / T2 : modèle configuré, thinking désactivé, pas de bloc de raisonnement — `worker/src/veille_worker/llm.py:29-37`, `worker/tests/test_llm.py`, `docker-compose.yml:69-70`
+- [x] Phase 2 / T3 : résumé français ; erreur explicite si vLLM arrêté — `evidence.md` d ; rejoué vLLM arrêté : `Erreur : vLLM injoignable à http://localhost:8000/v1 : Connection error.`, code 1 ; `APIError` traduite (`llm.py:40-43`, `test_llm.py:47-55`)
+- [x] Phase 2 / T4 : `docker compose run --rm worker-py python -m veille_worker.smoke` réussit — `evidence.md` d (code 0, résumé français)
+- [x] Phase 3 / T1 : migrations créent les tables avec `veille_app` — `evidence.md` f (`php artisan migrate --force`, 5 migrations, propriétaire `veille_app`)
+- [x] Phase 3 / T2 : `/admin` affiche la connexion Filament, aucune ressource — `evidence.md` e (`200`, `Login - Veille techno`) ; `web/tests/Feature/PublicPagesTest.php:7-9`
+- [x] Phase 3 / T3 : `http://localhost` via nginx ; FPM non publié — `evidence.md` e (`200`) ; `docker-compose.yml:15-37` sans `ports`
+- [x] Phase 3 / T4 : pint, lint front, Pest, build front — `evidence.md` h ; rejoué : `docker compose run --rm --no-deps app ./vendor/bin/pest` → `43 passed (141 assertions)` sans postgres démarré (isolation SQLite prouvée malgré `DB_CONNECTION=pgsql` injecté) ; `pint --test` → passed
+
+### Findings
+
+- `aidd_docs/tasks/2026_10/2026_10_19_socle-technique/phase-3.md:91` : `APP_ENV=production` par défaut (`docker-compose.yml:23`) fait demander confirmation à `php artisan migrate`, qui abandonne en non interactif (`exec -T`) ; la preuve a dû passer `--force` (`evidence.md` f) alors que le critère 6 du contrat et la phase 3 écrivent `php artisan migrate` → amender phase 3 / contrat (ou documenter la commande `docker compose exec app php artisan migrate --force`) — 🟢 minor, incoherence
+- `aidd_docs/tasks/2026_10/2026_10_19_socle-technique/plan.md:2` : l'`objective` dit encore « docker compose up démarre … worker-py », contredit par le critère 2 amendé ; `plan.md:42` annonce « deux éléments » pour trois puces ; `phase-1.md:63` garde `VLLM_GPU_MEMORY_UTILIZATION=0.85` sans mention dans l'amendement ; `phase-3.md:48` « cinq services démarrés » ; `evidence.md:13` « Le choix de la valeur par défaut reste à trancher » alors que 0.80 est fixé → corriger l'objectif, le décompte, et compléter les amendements phase 1 / phase 3 et la note d'evidence — 🟢 minor, incoherence
+- `docker-compose.yml:109-113` : `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `WORKER_DB_PASSWORD` sont injectés mais aucun code du worker ne les lit (`worker/src/veille_worker/config.py:14-19` ne lit que `VLLM_*`), et le nommage est asymétrique (`DB_USERNAME` mais `WORKER_DB_PASSWORD`, là où `app` reçoit `DB_PASSWORD`) → les retirer jusqu'au ticket collecte, ou les nommer de façon homogène (`DB_PASSWORD`) quand le lecteur sera écrit — 🟢 minor, rot
+- `web/phpunit.xml:37-40` : `force="true"` sur `<server>` est sans effet (PHPUnit écrase toujours `$_SERVER`, `vendor/phpunit/phpunit/src/TextUI/Configuration/PhpHandler.php:132-137`) → retirer l'attribut sur les `<server>` — 🟢 minor, standards

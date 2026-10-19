@@ -24,7 +24,7 @@ Collecte RSS, extraction, modèles métier, pages, digest, scheduler, sauvegarde
 3. `curl 127.0.0.1:8000/v1/models` liste `Qwen/Qwen3-8B-AWQ`.
 4. La commande de test du worker, lancée dans `worker-py`, renvoie un résumé en français non vide.
 5. `http://localhost` (via `nginx`) affiche la page d'accueil Laravel ; `/admin` affiche la connexion Filament.
-6. `php artisan migrate` passe avec le rôle propriétaire ; le rôle worker ne peut pas créer de table (`CREATE TABLE` refusé).
+6. `php artisan migrate --force` passe avec le rôle propriétaire ; le rôle worker ne peut pas créer de table (`CREATE TABLE` refusé).
 7. Les gates de `aidd_docs/memory/coding-assertions.md` passent sur les squelettes (pint, lint front, ruff, pest, pytest, build front).
 
 ## Décisions

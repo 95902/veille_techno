@@ -12,7 +12,7 @@ s'arrête sur `container veille_techno-vllm-1 is unhealthy`.
 
 Les preuves c, d, g, h (pytest complet) ont été obtenues avec `VLLM_GPU_MEMORY_UTILIZATION=0.80` passé dans
 l'environnement du shell, sans modifier `.env` ni `.env.example` : KV cache 3,01 Gio, 21 936 tokens, `healthy`, 0 redémarrage.
-Le choix de la valeur par défaut reste à trancher.
+Décision : la valeur par défaut passe à 0.80 (`.env.example`, commit 0fa4d4c).
 
 ## Résultats
 

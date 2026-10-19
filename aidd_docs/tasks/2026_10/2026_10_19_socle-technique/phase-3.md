@@ -45,7 +45,7 @@ journey
   section Setup
     phases 1 et 2 en place, .env complété, APP_KEY générée => configuration prête: 5: cli
   section Happy path
-    docker compose up -d => cinq services démarrés: 5: cli
+    docker compose up -d => nginx, app, postgres et vllm démarrés: 5: cli
     docker compose exec app php artisan migrate => migrations passées en veille_app: 5: cli
     GET http://localhost => page d'accueil Laravel affichée: 5: browser
     GET http://localhost/admin => écran de connexion Filament affiché: 5: browser
@@ -88,7 +88,7 @@ journey
 
 | Task | Acceptance criteria |
 | ---- | ------------------- |
-| 1 | `php artisan migrate` crée les tables avec le rôle `veille_app` |
+| 1 | `php artisan migrate --force` (APP_ENV=production) crée les tables avec le rôle `veille_app` |
 | 2 | `/admin` affiche la connexion Filament, aucune ressource n'est déclarée |
 | 3 | `http://localhost` affiche la page d'accueil via nginx ; le port PHP-FPM n'est pas publié sur l'hôte |
 | 4 | pint, lint front, Pest et build front passent |

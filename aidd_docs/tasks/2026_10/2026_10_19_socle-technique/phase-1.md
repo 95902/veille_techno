@@ -60,7 +60,7 @@ journey
 > Ignorer les secrets et documenter la configuration.
 
 1. `.gitignore` racine : `.env`, `vendor/`, `node_modules/`, `.venv/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`.
-2. `.env.example` : `POSTGRES_*` (superuser), `APP_DB_PASSWORD`, `WORKER_DB_PASSWORD`, `VLLM_MODEL=Qwen/Qwen3-14B-AWQ`, `VLLM_MAX_MODEL_LEN=8192`, `VLLM_GPU_MEMORY_UTILIZATION=0.85`, `VLLM_BASE_URL=http://vllm:8000/v1`, chacune commentée.
+2. `.env.example` : `POSTGRES_*` (superuser), `APP_DB_PASSWORD`, `WORKER_DB_PASSWORD`, `VLLM_MODEL=Qwen/Qwen3-8B-AWQ`, `VLLM_MAX_MODEL_LEN=8192`, `VLLM_GPU_MEMORY_UTILIZATION=0.80` (amendé, voir plus bas), `VLLM_BASE_URL=http://vllm:8000/v1`, chacune commentée.
 
 ### `2)` Service postgres
 
