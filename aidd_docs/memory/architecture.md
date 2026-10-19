@@ -42,7 +42,7 @@ flowchart LR
 - Sortie structurée vLLM (`response_format` `json_schema`, API OpenAI) : `title_fr`, `summary` tableau de exactement 3 phrases, `category` en `enum` des slugs lus en base. Revalidée en Python ; hors schéma → `failed`.
 - Résumé stocké en 3 lignes (une phrase par ligne) dans `articles.summary`.
 - Retentatives : `pending` et `failed` avec `attempts < 3` repassent à chaque collecte. vLLM injoignable : collecte interrompue, code de sortie 1, l'article courant n'est pas compté comme essai.
-- Une source en erreur (HTTP, réseau, flux invalide, erreur imprévue) est notée au bilan sans bloquer les autres ; une entrée malformée (ex. port invalide) est ignorée et comptée au bilan.
+- Une source en erreur (HTTP, réseau, flux invalide, erreur imprévue) est notée au bilan sans bloquer les autres ; une entrée malformée (ex. port invalide) ou dont l'URL dépasse 2048 octets UTF-8 (colonne et index unique) est ignorée et comptée au bilan.
 - Article : toute erreur d'extraction ou de LLM autre que vLLM injoignable ou base en erreur le passe en `failed` (essai compté) et la collecte continue.
 - Pages d'articles (URL de flux tiers) : http/https seulement, redirections suivies à la main (5 au plus), hôte résolu et refusé s'il a une IP non publique (services Compose compris), requête envoyée à l'IP validée (Host et SNI conservés), content-type HTML vérifié avant le corps, 3 Mo et 30 s au plus ; refus → repli sur le contenu du flux.
 - Une seule collecte à la fois : `pg_try_advisory_lock` de session au démarrage ; verrou pris → « collecte déjà en cours », code 0.

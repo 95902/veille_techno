@@ -1,6 +1,6 @@
 ---
 objective: "Une collecte quotidienne remplit la table articles avec titre FR, résumé de 3 phrases et catégorie produits par vLLM, à partir de sources gérées dans Filament."
-status: implemented
+status: reviewed
 ---
 
 # Plan: Collecte et résumé

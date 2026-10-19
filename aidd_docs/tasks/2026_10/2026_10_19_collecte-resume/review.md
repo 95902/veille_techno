@@ -1,6 +1,6 @@
 # Review: collecte et résumé
 
-- Rounds: 3
+- Rounds: 4
 - Started: 2026-10-19
 
 ## Round 1 · r-69a1
@@ -95,3 +95,33 @@
 
 - `worker/src/veille_worker/db.py:26-28` : `url_fits` compte des caractères, mais l'index unique `articles_normalized_url_unique` (btree) plafonne la ligne à 2704 octets ; feedparser garde les IRI non ASCII telles quelles (vérifié : `https://ex.org/文章/漢字`) et `normalize_url` ne les encode pas. Reproduit en revue en `veille_worker`, transaction annulée : URL de 1955 caractères CJK (5755 octets), `url_fits` → True, INSERT → `psycopg.errors.ProgramLimitExceeded: index row size 5768 exceeds btree version 4 maximum 2704`. C'est un `psycopg.Error`, relancé par `collect_sources` : toute la collecte s'arrête à chaque passage tant que l'entrée reste dans le flux — le défaut du round 2 subsiste pour les URL non ASCII → mesurer en octets UTF-8 (`len(clean_text(url).encode()) <= URL_MAX_CHARS` : 2048 octets tiennent sous 2704 et impliquent ≤ 2048 caractères), ajuster le commentaire « longueur en caractères », le faux dépôt (`worker/tests/helpers.py:100`) et ajouter une URL CJK au test `db` `test_url_limit_matches_the_articles_columns` — 🟡 major, error-handling
 - `worker/src/veille_worker/collect.py:79` : le bilan affiche « Entrées ignorées (malformées) » alors que le compteur inclut désormais les URL trop longues (docstring `collect.py:98` à jour, libellé non) → « Entrées ignorées (malformées ou URL trop longue) » ou « Entrées ignorées » — 🟢 minor, rot
+
+## Round 4 · r-9a17
+
+- Date: 2026-10-19
+- By: 95902
+- Diff: `main...9b64026`
+- Axes: code, functional, relevancy
+- Verdict: approve
+- Score: 10/12 met, 0 unmet, 2 unverified at runtime, 0 out of the diff
+
+### Criteria
+
+- [x] P1.1 Migrations sur Postgres et SQLite ; URL normalisée en double rejetée — Pest relancé en revue sur 9b64026 (SQLite mémoire forcé par `web/phpunit.xml`) : 112 passed (509 assertions), pint OK ; schéma Postgres exercé par `pytest -m db` (13 passed) ; `web/` inchangé depuis d3c3d5d (`git diff --quiet d3c3d5d 9b64026 -- web infra docker-compose.yml`)
+- [x] P1.2 Seed : 7 catégories, ~10 sources, relance sans doublon — `web/tests/Feature/Schema/CollectSchemaTest.php` (Pest 112 passed, relancé)
+- [x] P1.3 Admin gère sources/catégories, non-admin 403, catégorie utilisée non supprimable — `web/tests/Feature/Admin/SourceResourceTest.php`, `web/tests/Feature/Admin/CategoryResourceTest.php` (Pest relancé)
+- [x] P1.4 `veille_worker` lit et écrit comme prévu, DELETE et CREATE refusés — `worker/tests/test_repository_db.py:226` (pytest -m db 13 passed, relancé en revue sur 9b64026, transaction annulée)
+- [x] P2.1 Aucun DDL ni DELETE ; doublon d'URL sans erreur — `worker/src/veille_worker/db.py:148-164`, `worker/tests/test_repository_db.py:95`
+- [x] P2.2 Dédoublonnage, fenêtre 7 jours, plafond — `worker/src/veille_worker/collect.py:136-168`, `worker/tests/test_collect.py:212,274,292` (pytest -m "not slow" 111 passed, 13 skipped, relancé ; ruff OK)
+- [x] P2.3 Page vide → contenu du flux ; budget respecté — `worker/tests/test_extract.py` (suite relancée)
+- [x] P2.4 Schéma imposé ; hors schéma → `failed` — `worker/tests/test_llm.py`, `worker/tests/test_collect.py:334`
+- [x] P2.5 Source injoignable au bilan sans bloquer les autres ; 3 échecs → plus retenté — `worker/tests/test_collect.py:321`, `worker/tests/test_repository_db.py:107` ; URL au-delà de 2048 octets UTF-8 ignorée et comptée, plus d'abandon de collecte sur IRI non ASCII : `worker/src/veille_worker/db.py:26-31`, `worker/tests/test_repository_db.py:177` (CJK 1955 caractères → `ProgramLimitExceeded` en insertion directe, `url_fits` False ; 600 caractères CJK insérés)
+- Unverified at runtime: P3.1 `worker-cron` démarré, planification annoncée — preuve evidence.md §7 sur l'image `veille_techno-worker` créée à 15:57:59, antérieure à 0abc034 (16:07:25) ; extraite en revue, son `src/veille_worker` diffère de 9b64026 (`db.py` compte encore des caractères). `worker-cron` n'est pas démarré actuellement ; une reconstruction de l'image puis un démarrage montreraient le critère sur cette tête
+- Unverified at runtime: P3.2 collecte réelle `summarized`, en français, catégorisés — evidence.md §7 sur la même image antérieure ; le correctif ne touche que les URL > 2048 octets, une collecte relancée sur l'image reconstruite le montrerait
+- [x] P3.3 Mémoire décrit pipeline et service planifié sans contredire le code — `aidd_docs/memory/architecture.md`, `aidd_docs/memory/codebase-map.md` (aucune contradiction relevée ; omission notée en finding)
+
+### Findings
+
+- `worker/src/veille_worker/collect.py:143-144` : le motif journalisé dit « URL de plus de 2048 caractères » et le commentaire « Plus longue que la colonne », alors que la limite est désormais 2048 octets UTF-8 et vise aussi l'index → « URL de plus de {URL_MAX_BYTES} octets » et « Trop longue pour la colonne ou son index unique » — 🟢 minor, rot
+- `worker/tests/test_collect.py:274` : aucun test de `collect` (faux dépôt ou `db`) ne passe une IRI non ASCII de moins de 2048 caractères et de plus de 2048 octets ; le lien entre `collect_source` et la mesure en octets n'est couvert qu'à travers `url_fits` (`worker/tests/test_repository_db.py:177`) → ajouter une entrée CJK au test `test_entry_with_a_url_longer_than_the_column_is_skipped_and_counted` (le faux dépôt lèverait sinon) — 🟢 minor, code-health
+- `aidd_docs/memory/architecture.md:45` : la mémoire cite les entrées malformées ignorées et comptées, mais pas les URL au-delà de 2048 octets, désormais comptées dans le même compteur et le même libellé de bilan → compléter la phrase (« … ou dont l'URL dépasse 2048 octets UTF-8 ») — 🟢 minor, fit
