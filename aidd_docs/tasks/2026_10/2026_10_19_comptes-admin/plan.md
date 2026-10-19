@@ -1,6 +1,6 @@
 ---
 objective: "Seuls les admins accèdent à /admin ; le premier admin se crée par commande ; les admins gèrent les comptes collaborateurs dans Filament avec un lien de définition du mot de passe."
-status: implemented
+status: reviewed
 ---
 
 # Plan: Comptes admin
