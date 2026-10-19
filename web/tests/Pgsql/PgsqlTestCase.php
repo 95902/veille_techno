@@ -3,6 +3,7 @@
 namespace Tests\Pgsql;
 
 use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use Tests\TestCase;
@@ -16,6 +17,8 @@ use Throwable;
  */
 abstract class PgsqlTestCase extends TestCase
 {
+    private static bool $migratedTestDatabase = false;
+
     public function createApplication(): Application
     {
         $app = parent::createApplication();
@@ -42,6 +45,13 @@ abstract class PgsqlTestCase extends TestCase
 
         if ($actual !== $expected || ! self::isTestDatabase($actual)) {
             throw new RuntimeException("Connected to database \"{$actual}\", expected \"{$expected}\".");
+        }
+
+        // RefreshDatabase migrates once per process: when SQLite tests ran first, its flag is
+        // already set and the test database would keep a stale schema. Migrate it once here.
+        if (! self::$migratedTestDatabase) {
+            RefreshDatabaseState::$migrated = false;
+            self::$migratedTestDatabase = true;
         }
 
         return $app;
