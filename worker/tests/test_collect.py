@@ -10,7 +10,7 @@ from veille_worker import collect as collect_module
 from veille_worker import extract
 from veille_worker.collect import Report, run
 from veille_worker.config import Settings
-from veille_worker.db import URL_MAX_CHARS
+from veille_worker.db import URL_MAX_BYTES
 from veille_worker.llm import Enrichment, LLMInvalidOutputError, LLMUnavailableError
 
 SETTINGS = Settings(max_attempts=3)
@@ -267,16 +267,16 @@ def test_malformed_entry_is_skipped_and_counted_without_stopping_the_run():
     assert urls == {"https://mixed.example/a", "https://mixed.example/b", AI_ACT}
     assert report.sources_ok == ["Source 1", "Source 2"]
     assert report.skipped_entries == 1
-    assert "Entrées ignorées (malformées) : 1" in report.lines(1.0)
+    assert "Entrées ignorées (malformées ou URL trop longue) : 1" in report.lines(1.0)
     assert report.summarized == 3 and report.aborted is None
 
 
 def test_entry_with_a_url_longer_than_the_column_is_skipped_and_counted():
     url = "https://long.example/feed.xml"
-    too_long = "https://long.example/" + "a" * (URL_MAX_CHARS - len("https://long.example/") + 1)
-    assert len(too_long) == URL_MAX_CHARS + 1
+    too_long = "https://long.example/" + "a" * (URL_MAX_BYTES - len("https://long.example/") + 1)
+    assert len(too_long) == URL_MAX_BYTES + 1
     # Raccourcie par la normalisation (utm_*), mais l'URL brute reste trop longue.
-    raw_too_long = "https://long.example/b?utm_source=" + "x" * URL_MAX_CHARS
+    raw_too_long = "https://long.example/b?utm_source=" + "x" * URL_MAX_BYTES
     links = ["https://long.example/a", too_long, raw_too_long, "https://long.example/c"]
     repo = FakeRepo([source(1, url), source(2, PRESS)])
 
@@ -291,7 +291,7 @@ def test_entry_with_a_url_longer_than_the_column_is_skipped_and_counted():
 
 def test_url_at_the_column_limit_is_kept():
     url = "https://long.example/feed.xml"
-    at_limit = "https://long.example/" + "a" * (URL_MAX_CHARS - len("https://long.example/"))
+    at_limit = "https://long.example/" + "a" * (URL_MAX_BYTES - len("https://long.example/"))
     repo = FakeRepo([source(1, url)])
 
     report = collect(repo, FakeEnricher(), routes={url: feed_with([at_limit])})

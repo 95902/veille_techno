@@ -18,12 +18,13 @@ from psycopg.rows import dict_row
 from veille_worker.collect import Report, collect_source
 from veille_worker.config import Settings
 from veille_worker.db import (
-    URL_MAX_CHARS,
+    URL_MAX_BYTES,
     ArticleToProcess,
     Category,
     NewArticle,
     Repository,
     Source,
+    url_fits,
 )
 
 pytestmark = pytest.mark.db
@@ -163,19 +164,33 @@ def padded_url(length: int) -> str:
 
 
 def test_url_limit_matches_the_articles_columns(conn, repo, a_source):
-    at_limit = padded_url(URL_MAX_CHARS)
+    at_limit = padded_url(URL_MAX_BYTES)
     assert repo.insert_article(new_article(a_source, url=at_limit, normalized_url=at_limit))
 
     for column in ("url", "normalized_url"):
-        too_long = padded_url(URL_MAX_CHARS + 1)
+        too_long = padded_url(URL_MAX_BYTES + 1)
         article = new_article(a_source, **{column: too_long})
         with pytest.raises(psycopg.errors.StringDataRightTruncation), conn.transaction():
             repo.insert_article(article)
 
 
+def test_url_limit_is_measured_in_bytes_for_non_ascii_urls(conn, repo, a_source):
+    # 1955 caractères CJK distincts = 5888 octets : sous 2048 caractères, mais au-delà de l'index
+    # (2704 o). Des caractères variés évitent que Postgres compresse la clé d'index.
+    cjk = "https://pytest.invalid/" + "".join(chr(0x4E00 + i) for i in range(1955))
+    assert len(cjk) < URL_MAX_BYTES
+    assert not url_fits(cjk)
+    with pytest.raises(psycopg.errors.ProgramLimitExceeded), conn.transaction():
+        repo.insert_article(new_article(a_source, url=cjk, normalized_url=cjk))
+
+    fits = "https://pytest.invalid/" + "".join(chr(0x4E00 + i) for i in range(600))  # ~1823 o
+    assert url_fits(fits)
+    assert repo.insert_article(new_article(a_source, url=fits, normalized_url=fits))
+
+
 def test_collect_skips_over_long_urls_and_keeps_long_titles(conn, repo, a_source):
     feed_url = f"https://pytest.invalid/{uuid.uuid4()}/feed.xml"
-    kept, too_long = padded_url(200), padded_url(URL_MAX_CHARS + 1)
+    kept, too_long = padded_url(200), padded_url(URL_MAX_BYTES + 1)
     long_title = "Titre très long " * 5000  # colonne text : aucune troncature nécessaire
     date = "Mon, 19 Oct 2026 11:00:00 GMT"
     items = "".join(

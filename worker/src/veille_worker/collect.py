@@ -20,7 +20,7 @@ import psycopg
 
 from veille_worker.config import USER_AGENT, Settings
 from veille_worker.db import (
-    URL_MAX_CHARS,
+    URL_MAX_BYTES,
     ArticleToProcess,
     Category,
     DatabaseUnavailableError,
@@ -76,7 +76,7 @@ class Report:
         out += [f"  ✗ {name} : {error}" for name, error in self.sources_ko]
         out += [
             f"Nouveaux articles : {self.new_articles}",
-            f"Entrées ignorées (malformées) : {self.skipped_entries}",
+            f"Entrées ignorées (malformées ou URL trop longue) : {self.skipped_entries}",
             f"Résumés : {self.summarized}",
             f"Échecs : {self.failed}",
             f"Durée : {duration:.0f} s",
@@ -141,7 +141,7 @@ def collect_source(
             continue
         if not (url_fits(entry.url) and url_fits(normalized)):
             # Plus longue que la colonne : l'INSERT échouerait et interromprait la collecte.
-            skip(f"URL de plus de {URL_MAX_CHARS} caractères", entry.url)
+            skip(f"URL de plus de {URL_MAX_BYTES} caractères", entry.url)
             continue
         by_url.setdefault(normalized, entry)
     known = repo.known_urls(list(by_url))

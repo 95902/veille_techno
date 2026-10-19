@@ -20,12 +20,15 @@ COLLECT_LOCK_KEY = 7_265_100_001
 # web/database/migrations/2026_10_19_150002_create_articles_table.php. Les autres textes
 # écrits (title, title_fr, content, summary, last_error) sont des colonnes text, et status
 # ne reçoit que des valeurs fixes du worker. À garder aligné sur la migration.
-URL_MAX_CHARS = 2048
+# Mesurée en octets UTF-8 : l'index unique sur normalized_url plafonne une ligne à 2704 octets,
+# et une IRI non ASCII de moins de 2048 caractères peut le dépasser. 2048 octets garantissent
+# aussi au plus 2048 caractères.
+URL_MAX_BYTES = 2048
 
 
 def url_fits(url: str) -> bool:
-    """L'URL tient dans articles.url / normalized_url (longueur en caractères, comme Postgres)."""
-    return len(clean_text(url) or "") <= URL_MAX_CHARS
+    """L'URL tient dans articles.url / normalized_url et dans leur index (octets UTF-8)."""
+    return len((clean_text(url) or "").encode()) <= URL_MAX_BYTES
 
 
 def clean_text(value: str | None) -> str | None:
