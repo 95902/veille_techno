@@ -1,6 +1,6 @@
 # Review: collecte et résumé
 
-- Rounds: 2
+- Rounds: 3
 - Started: 2026-10-19
 
 ## Round 1 · r-69a1
@@ -69,3 +69,29 @@
 - `worker/src/veille_worker/collect.py:102` : une entrée de flux dont le lien dépasse 2048 caractères (colonnes `url`/`normalized_url` en `varchar(2048)`) lève `psycopg.errors.StringDataRightTruncation` (reproduit en revue avec `Repository.insert_article` en `veille_worker`, transaction annulée) ; `collect_sources` relance tout `psycopg.Error`, donc la collecte entière s'arrête (« base indisponible », code 1, aucun résumé) à chaque passage tant que l'entrée reste dans le flux : même classe de défaut que l'entrée malformée de r-69a1, sur le chemin d'insertion → dans `collect_source`, ignorer et compter (`skipped_entries`) les entrées dont `url` ou l'URL normalisée dépasse 2048 caractères (constante partagée avec le schéma), test avec un lien trop long — 🟡 major, error-handling
 - `worker/src/veille_worker/collect.py:155` : si une erreur imprévue survient après des insertions (autocommit), la source est notée KO et `new_articles` ne compte pas les lignes déjà insérées : le bilan sous-estime → incrémenter `report.new_articles` à chaque insertion — 🟢 minor, error-handling
 - `aidd_docs/tasks/2026_10/2026_10_19_collecte-resume/evidence.md:205-206` : les gates annoncent 106 passed / 9 skipped et 9 tests `db`, la suite en compte 108 / 10 et 10 (relancé en revue) → rafraîchir les chiffres — 🟢 minor, rot
+
+## Round 3 · r-3e1d
+
+- Date: 2026-10-19
+- By: 95902
+- Diff: `d253cce...d3c3d5d`
+- Axes: code, functional, relevancy
+- Verdict: changes-requested
+- Score: 7/12 met, 0 unmet, 0 unverified at runtime, 5 out of the diff
+
+### Criteria
+
+- Out of the diff: phase 1 — schéma, seed, back-office, droits du rôle (4 criteria) ; Pest relancé en revue sur d3c3d5d : 112 passed (509 assertions)
+- [x] P2.1 Aucun DDL ni DELETE ; doublon d'URL sans erreur — `worker/tests/test_repository_db.py:94,211` (pytest -m db 12 passed, relancé en revue sur d3c3d5d)
+- [x] P2.2 Dédoublonnage, fenêtre 7 jours, plafond — `worker/src/veille_worker/collect.py:139-163`, `worker/tests/test_collect.py:274,292` (pytest -m "not slow" 111 passed, 12 skipped, relancé ; ruff OK)
+- [x] P2.3 Page vide → contenu du flux ; budget respecté — `worker/tests/test_extract.py` (inchangé, suite relancée)
+- [x] P2.4 Schéma imposé ; hors schéma → `failed` — `worker/tests/test_llm.py`, `worker/tests/test_collect.py` (inchangés, suite relancée)
+- [x] P2.5 Source injoignable au bilan sans bloquer les autres ; 3 échecs → plus retenté — `worker/tests/test_collect.py:321` ; nouveaux articles comptés avant une erreur imprévue : `worker/tests/test_collect.py:303` ; URL > 2048 caractères ignorée et comptée : `worker/tests/test_collect.py:274`, `worker/tests/test_repository_db.py:176`
+- [x] P3.1 `worker-cron` démarré, planification annoncée, rien au démarrage — evidence.md §7 « worker-cron » ; image `veille_techno-worker` (créée 15:57:59) extraite en revue : `src/veille_worker` identique octet pour octet à `worker/src/veille_worker` de d3c3d5d (`diff -r` vide)
+- [x] P3.2 Collecte réelle : `summarized`, en français, catégorisés, bilan et extrait SQL — evidence.md §7 (41 puis 20 résumés, 0 échec, même image) ; base relue en revue (SELECT, `veille_worker`) : 160 summarized, 11 failed, 0 pending, 171 lignes / 171 `normalized_url` distinctes, 0 summarized sans catégorie/titre/résumé, 0 couple (source, titre) en double
+- Out of the diff: phase 3 — P3.3 mémoire (1 criterion)
+
+### Findings
+
+- `worker/src/veille_worker/db.py:26-28` : `url_fits` compte des caractères, mais l'index unique `articles_normalized_url_unique` (btree) plafonne la ligne à 2704 octets ; feedparser garde les IRI non ASCII telles quelles (vérifié : `https://ex.org/文章/漢字`) et `normalize_url` ne les encode pas. Reproduit en revue en `veille_worker`, transaction annulée : URL de 1955 caractères CJK (5755 octets), `url_fits` → True, INSERT → `psycopg.errors.ProgramLimitExceeded: index row size 5768 exceeds btree version 4 maximum 2704`. C'est un `psycopg.Error`, relancé par `collect_sources` : toute la collecte s'arrête à chaque passage tant que l'entrée reste dans le flux — le défaut du round 2 subsiste pour les URL non ASCII → mesurer en octets UTF-8 (`len(clean_text(url).encode()) <= URL_MAX_CHARS` : 2048 octets tiennent sous 2704 et impliquent ≤ 2048 caractères), ajuster le commentaire « longueur en caractères », le faux dépôt (`worker/tests/helpers.py:100`) et ajouter une URL CJK au test `db` `test_url_limit_matches_the_articles_columns` — 🟡 major, error-handling
+- `worker/src/veille_worker/collect.py:79` : le bilan affiche « Entrées ignorées (malformées) » alors que le compteur inclut désormais les URL trop longues (docstring `collect.py:98` à jour, libellé non) → « Entrées ignorées (malformées ou URL trop longue) » ou « Entrées ignorées » — 🟢 minor, rot
