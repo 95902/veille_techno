@@ -20,6 +20,9 @@ ALTER DATABASE :"db" OWNER TO veille_app;
 ALTER SCHEMA public OWNER TO veille_app;
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 REVOKE CREATE ON DATABASE :"db" FROM PUBLIC;
+-- Pas de tables temporaires pour PUBLIC (donc veille_worker). veille_app, propriétaire de la base,
+-- garde TEMPORARY par ses droits de propriétaire ; Laravel n'en a de toute façon pas besoin.
+REVOKE TEMPORARY ON DATABASE :"db" FROM PUBLIC;
 
 -- veille_worker : connexion et lecture/écriture de données, aucun DDL.
 GRANT CONNECT ON DATABASE :"db" TO veille_worker;

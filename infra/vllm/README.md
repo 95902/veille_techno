@@ -10,7 +10,7 @@ Service `vllm` de `docker-compose.yml` : API compatible OpenAI sur le GPU local 
 
 ## Modèle
 
-- Cible du contrat : `Qwen/Qwen3-14B-AWQ`, pour la qualité du français. Ne tient pas sur la carte (voir « Historique »).
+- Visé à l'origine : `Qwen/Qwen3-14B-AWQ`, pour la qualité du français. Ne tient pas sur la carte (voir « Historique ») ; le contrat amendé retient le 8B.
 - **Servi : `Qwen/Qwen3-8B-AWQ`** (`VLLM_MODEL` dans `.env.example`), AWQ 4 bits officiel de Qwen, noyaux Marlin.
 - Repli : `Qwen/Qwen3-4B` (bf16), français nettement plus faible.
 
@@ -20,7 +20,7 @@ Service `vllm` de `docker-compose.yml` : API compatible OpenAI sur le GPU local 
 | -------- | ------ | ---- |
 | `VLLM_MODEL` | `Qwen/Qwen3-8B-AWQ` | modèle servi |
 | `VLLM_MAX_MODEL_LEN` | `8192` | contexte maximal ; à réduire si le KV cache ne tient pas (min. 4096) |
-| `VLLM_GPU_MEMORY_UTILIZATION` | `0.85` | part de VRAM réservée |
+| `VLLM_GPU_MEMORY_UTILIZATION` | `0.80` | part de VRAM réservée |
 | `VLLM_HF_HUB_OFFLINE` | `0` | `1` interdit tout accès à Hugging Face (modèle déjà en cache) |
 
 Autres options fixes : `--reasoning-parser qwen3`, `ipc: host`, port `127.0.0.1:8000` uniquement (l'API n'a pas d'authentification).
@@ -29,11 +29,12 @@ Mesures sur la RTX 5070 (12 Go, ~1,1 Gio pris par l'affichage) :
 
 | Modèle | `GPU_MEMORY_UTILIZATION` | Poids chargés | KV cache (8192 tokens max) |
 | ------ | ------------------------ | ------------- | -------------------------- |
-| `Qwen/Qwen3-8B-AWQ` | 0.85 | 5,71 Gio | 1,38 à 1,44 Gio, 10 080 à 10 480 tokens (~1,25 requête de 8192) |
+| `Qwen/Qwen3-8B-AWQ` | 0.80 | 5,71 Gio | 3,01 Gio, 21 936 tokens (mesure du 2026-10-19, cache de compilation chaud) |
+| `Qwen/Qwen3-8B-AWQ` | 0.85 | 5,71 Gio | ❌ OOM au warm-up du sampler une fois le cache de compilation chaud (redémarrages en boucle) |
 | `Qwen/Qwen3-4B` | 0.80 | 7,56 Gio | 1,18 Gio, 8 624 tokens (1,05 requête de 8192) |
 
-Pour le 8B, 0.80 laisserait environ 0,8 Gio de KV cache, moins qu'une requête de 8192 tokens :
-garder 0.85, ou descendre `VLLM_MAX_MODEL_LEN` à 4096.
+Pour le 8B, 0.85 ne laisse plus de marge hors budget vLLM (warm-up du sampler) : rester à 0.80.
+Si l'affichage prend plus de VRAM, descendre à 0.78 ou réduire `VLLM_MAX_MODEL_LEN` à 4096.
 
 ## Cache Hugging Face (volume `hf_cache`)
 

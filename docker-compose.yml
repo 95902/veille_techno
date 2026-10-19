@@ -19,6 +19,9 @@ services:
     user: "${APP_UID:-1000}:${APP_GID:-1000}"
     environment:
       APP_KEY: ${APP_KEY}
+      # nginx est publié sur le LAN : production et debug coupé par défaut, ces valeurs priment sur web/.env.
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
       APP_URL: http://localhost
       DB_CONNECTION: pgsql
       DB_HOST: postgres
@@ -46,7 +49,9 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      # -h 127.0.0.1 : passe par TCP, donc seulement après les scripts d'init (le serveur
+      # temporaire d'init n'écoute que sur le socket Unix).
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -92,11 +97,20 @@ services:
 
   worker-py:
     build: ./worker
-    # Lancé à la demande (puis par cron) : docker compose run --rm worker-py python -m veille_worker.smoke
+    # Hors du `docker compose up` par défaut (profil tools). Lancé à la demande (puis par cron) :
+    #   docker compose run --rm worker-py python -m veille_worker.smoke
+    profiles: ["tools"]
     restart: "no"
-    env_file: .env
+    # Liste explicite : le worker ne reçoit ni le mot de passe superutilisateur, ni celui de
+    # veille_app, ni APP_KEY.
     environment:
+      VLLM_MODEL: ${VLLM_MODEL}
       VLLM_BASE_URL: http://vllm:8000/v1
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: ${POSTGRES_DB}
+      DB_USERNAME: veille_worker
+      WORKER_DB_PASSWORD: ${WORKER_DB_PASSWORD}
     depends_on:
       postgres:
         condition: service_healthy
