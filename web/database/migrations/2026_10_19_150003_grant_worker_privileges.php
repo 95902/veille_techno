@@ -2,7 +2,6 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 return new class extends Migration
 {
@@ -13,10 +12,13 @@ return new class extends Migration
      * categories, inserts and updates articles; nothing else, no DELETE, no DDL.
      * Older installs got blanket default privileges from the init script: they are
      * revoked first, so that no other table (users, sessions...) stays readable.
+     *
+     * On PostgreSQL a missing worker role fails the migration: recording it as run would
+     * leave the worker with "permission denied" and the grants would never be replayed.
      */
     public function up(): void
     {
-        $role = $this->workerRole();
+        $role = $this->workerRole(strict: true);
         if ($role === null) {
             return;
         }
@@ -37,7 +39,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        $role = $this->workerRole();
+        $role = $this->workerRole(strict: false);
         if ($role === null) {
             return;
         }
@@ -47,9 +49,10 @@ return new class extends Migration
     }
 
     /**
-     * Quoted worker role name, or null when there is nothing to grant (SQLite, role missing).
+     * Quoted worker role name, or null when there is nothing to grant (SQLite, or role
+     * missing on rollback). On PostgreSQL, a missing role throws when $strict.
      */
-    private function workerRole(): ?string
+    private function workerRole(bool $strict): ?string
     {
         if (DB::getDriverName() !== 'pgsql') {
             return null;
@@ -57,7 +60,11 @@ return new class extends Migration
 
         $role = (string) config('database.connections.pgsql.worker_role');
         if (DB::selectOne('SELECT 1 FROM pg_roles WHERE rolname = ?', [$role]) === null) {
-            Log::warning("Worker role \"{$role}\" not found: worker privileges not granted.");
+            if ($strict) {
+                throw new RuntimeException(
+                    "Worker role \"{$role}\" not found: create it (infra/postgres/init) before migrating."
+                );
+            }
 
             return null;
         }
