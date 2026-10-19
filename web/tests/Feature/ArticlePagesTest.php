@@ -66,8 +66,8 @@ test('the list shows 20 summarized articles per page, most recent first', functi
             ->where('filters', ['q' => '', 'categorie' => '']));
 });
 
-test('an undated article falls back after the dated ones', function () {
-    readableArticle(['published_at' => null, 'title_fr' => 'Sans date']);
+test('an undated article collected earlier comes after a more recent dated one', function () {
+    readableArticle(['published_at' => null, 'created_at' => now()->subDays(20), 'title_fr' => 'Sans date']);
     readableArticle(['published_at' => now()->subDays(10), 'title_fr' => 'Daté']);
 
     $this->actingAs(User::factory()->create())
@@ -127,7 +127,8 @@ test('an unknown category gives an empty list without error', function () {
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->where('articles.total', 0)
-            ->has('articles.data', 0));
+            ->has('articles.data', 0)
+            ->where('filters.categorie', ''));
 });
 
 test('an overlong query is rejected by validation', function () {

@@ -32,10 +32,16 @@ class ArticleController extends Controller
             ->withQueryString()
             ->through(fn (Article $article) => $this->card($article));
 
+        $categories = Category::query()->orderBy('name')->get(['name', 'slug']);
+
         return Inertia::render('articles/Index', [
             'articles' => $articles,
-            'categories' => Category::query()->orderBy('name')->get(['name', 'slug']),
-            'filters' => ['q' => $q, 'categorie' => $categorie],
+            'categories' => $categories,
+            // An unknown slug still filters to an empty list, but the select falls back to "all".
+            'filters' => [
+                'q' => $q,
+                'categorie' => $categories->contains('slug', $categorie) ? $categorie : '',
+            ],
         ]);
     }
 

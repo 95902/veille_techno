@@ -98,8 +98,8 @@ class Article extends Model
 
     /**
      * Full-text search (PostgreSQL only, search_vector), most relevant first; then, and
-     * alone without a query, most recent first: publication date, undated last, then
-     * collection date.
+     * alone without a query, most recent first: publication date, or collection date for
+     * an undated article (the date shown on its card).
      *
      * @param  Builder<Article>  $query
      */
@@ -112,8 +112,7 @@ class Article extends Model
                 ->orderByRaw("ts_rank(search_vector, websearch_to_tsquery('fr_unaccent', ?)) DESC", [$terms]);
         }
 
-        $query->orderByRaw('published_at DESC NULLS LAST')
-            ->orderByDesc('created_at')
+        $query->orderByRaw('COALESCE(published_at, created_at) DESC')
             ->orderByDesc('id');
     }
 }

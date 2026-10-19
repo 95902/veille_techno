@@ -93,10 +93,22 @@ test('free-form input never raises an SQL error', function (string $terms) {
     'stop words only' => 'le la les',
 ]);
 
-test('without a query the most recent articles come first', function () {
+test('without a query the most recent articles come first, undated ones by collection date', function () {
     $old = summarizedArticle(['published_at' => now()->subDays(3)]);
-    $undated = summarizedArticle(['published_at' => null]);
+    $undatedRecent = summarizedArticle(['published_at' => null, 'created_at' => now()->subMinutes(30)]);
+    $undatedOld = summarizedArticle(['published_at' => null, 'created_at' => now()->subDays(10)]);
     $recent = summarizedArticle(['published_at' => now()->subHour()]);
 
-    expect(searchIds(null))->toBe([$recent->id, $old->id, $undated->id]);
+    expect(searchIds(null))->toBe([$undatedRecent->id, $recent->id, $old->id, $undatedOld->id]);
+});
+
+test('equally relevant results fall back to the date order', function () {
+    $older = summarizedArticle(['title_fr' => 'Sécurité des agents', 'published_at' => now()->subDays(4)]);
+    $undated = summarizedArticle([
+        'title_fr' => 'Sécurité des agents',
+        'published_at' => null,
+        'created_at' => now()->subHour(),
+    ]);
+
+    expect(searchIds('sécurité'))->toBe([$undated->id, $older->id]);
 });

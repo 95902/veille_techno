@@ -57,7 +57,10 @@ const lines = computed(() => summaryLines(props.article.summary));
             <h1 class="text-2xl font-semibold tracking-tight">
                 {{ article.title_fr }}
             </h1>
-            <p class="text-sm text-muted-foreground">
+            <p
+                v-if="article.title !== article.title_fr"
+                class="text-sm text-muted-foreground"
+            >
                 Titre d'origine :
                 <span class="italic">{{ article.title }}</span>
             </p>
