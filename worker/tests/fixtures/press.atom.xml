@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Tech Press – AI</title>
+  <id>https://press.example.org/ai</id>
+  <updated>2026-10-19T08:00:00Z</updated>
+  <entry>
+    <title type="html">EU &amp;amp; the AI Act: what changes in 2027</title>
+    <link rel="alternate" type="text/html" href="https://press.example.org/2026/10/ai-act-2027"/>
+    <id>https://press.example.org/?p=42</id>
+    <published>2026-10-19T08:00:00+02:00</published>
+    <updated>2026-10-19T09:00:00+02:00</updated>
+    <summary>Short teaser.</summary>
+    <content type="html"><![CDATA[<p>The European Union confirmed the timeline of the AI Act.</p><p>General-purpose models must publish a summary of their training data.</p><p>Providers of high-risk systems get one more year to comply, and fines can reach 7 percent of global turnover.</p><script>track()</script>]]></content>
+  </entry>
+</feed>

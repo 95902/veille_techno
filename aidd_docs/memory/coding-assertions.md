@@ -19,6 +19,9 @@ PHP et front tournent dans le conteneur `app` (PHP 8.4 + Node ; le PHP de l'hôt
 | 1     | `W ./vendor/bin/pest`            | suite complète Laravel                  |
 | 2     | `cd worker && uv run pytest`     | suite complète worker (vLLM démarré)    |
 | 3     | `W npm run build`                | build du front                          |
+| 4     | `cd worker && DB_HOST=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' veille_techno-postgres-1) WORKER_DB_PASSWORD=$(grep ^WORKER_DB_PASSWORD= ../.env \| cut -d= -f2) uv run pytest -m db` | SQL de `Repository` contre le Postgres de Compose (`docker compose up -d postgres`), en `veille_worker` |
+
+Les tests `db` sont ignorés sans `WORKER_DB_PASSWORD` dans l'environnement : `pytest -m "not slow"` reste vert sans Compose. Postgres n'est pas publié sur l'hôte, d'où l'IP du conteneur.
 
 ## Behavior
 

@@ -1,0 +1,4 @@
+# Planification du service worker-cron (supercronic).
+# @COLLECT_SCHEDULE@ est remplacé au démarrage par COLLECT_SCHEDULE (défaut : 0 6 * * *),
+# évalué dans le fuseau TZ du conteneur (Europe/Paris).
+@COLLECT_SCHEDULE@ python -m veille_worker.collect

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Lab Blog</title>
+    <link>https://lab.example.com/</link>
+    <description>Actualités d'un labo IA (fixture figée)</description>
+    <item>
+      <title>Introducing Model X</title>
+      <link>https://lab.example.com/news/model-x?utm_source=rss&amp;utm_medium=feed#top</link>
+      <pubDate>Sun, 18 Oct 2026 10:00:00 GMT</pubDate>
+      <description><![CDATA[<p>Model X is our <b>new</b> open-weight model.</p>]]></description>
+    </item>
+    <item>
+      <title>Model X, again (same article, other tracking)</title>
+      <link>https://LAB.example.com/news/model-x?utm_campaign=dup</link>
+      <pubDate>Sun, 18 Oct 2026 09:00:00 GMT</pubDate>
+      <description>Duplicate entry.</description>
+    </item>
+    <item>
+      <title>Agents SDK 2.0</title>
+      <link>https://lab.example.com/news/agents-sdk</link>
+      <pubDate>Fri, 16 Oct 2026 08:00:00 GMT</pubDate>
+      <description><![CDATA[<p>The Agents SDK reaches version 2.0 with tracing, handoffs and guardrails. Developers can now build multi-agent workflows with a few lines of code, and deploy them on any cloud.</p>]]></description>
+    </item>
+    <item>
+      <title>Safety report</title>
+      <link>https://lab.example.com/news/safety-report</link>
+      <pubDate>Tue, 13 Oct 2026 14:00:00 GMT</pubDate>
+      <description>Our quarterly safety report.</description>
+    </item>
+    <item>
+      <title>An old post</title>
+      <link>https://lab.example.com/news/old-post</link>
+      <pubDate>Fri, 09 Oct 2026 12:00:00 GMT</pubDate>
+      <description>Ten days old, outside the first-run window.</description>
+    </item>
+    <item>
+      <title>Undated post</title>
+      <link>https://lab.example.com/news/undated</link>
+      <description>No date at all.</description>
+    </item>
+  </channel>
+</rss>

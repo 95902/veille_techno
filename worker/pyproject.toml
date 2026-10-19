@@ -5,8 +5,11 @@ description = "Worker de veille : collecte, extraction, résumé et catégorisat
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "feedparser>=6.0.14",
+    "httpx>=0.28.1",
     "openai>=3.35.1",
     "psycopg[binary]>=3.3.6",
+    "trafilatura>=2.3.1",
 ]
 
 [dependency-groups]
@@ -23,6 +26,7 @@ build-backend = "uv_build"
 testpaths = ["tests"]
 markers = [
     "slow: appelle des services réels (vLLM) ; exclure avec -m \"not slow\"",
+    "db: SQL réel contre le Postgres de Compose (veille_worker) ; ignoré sans WORKER_DB_PASSWORD",
 ]
 
 [tool.ruff]

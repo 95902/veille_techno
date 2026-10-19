@@ -24,13 +24,11 @@ REVOKE CREATE ON DATABASE :"db" FROM PUBLIC;
 -- garde TEMPORARY par ses droits de propriétaire ; Laravel n'en a de toute façon pas besoin.
 REVOKE TEMPORARY ON DATABASE :"db" FROM PUBLIC;
 
--- veille_worker : connexion et lecture/écriture de données, aucun DDL.
+-- veille_worker : connexion et accès au schéma seulement, aucun DDL. Aucun privilège par
+-- défaut sur les tables : les droits table par table (SELECT sources/categories,
+-- SELECT/INSERT/UPDATE articles) viennent d'une migration Laravel, exécutée par veille_app.
 GRANT CONNECT ON DATABASE :"db" TO veille_worker;
 GRANT USAGE ON SCHEMA public TO veille_worker;
-ALTER DEFAULT PRIVILEGES FOR ROLE veille_app IN SCHEMA public
-  GRANT SELECT, INSERT, UPDATE ON TABLES TO veille_worker;
-ALTER DEFAULT PRIVILEGES FOR ROLE veille_app IN SCHEMA public
-  GRANT USAGE, SELECT ON SEQUENCES TO veille_worker;
 
 -- Recherche plein texte sans accents.
 CREATE EXTENSION IF NOT EXISTS unaccent;
