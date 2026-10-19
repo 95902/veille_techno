@@ -8,6 +8,7 @@ use App\Filament\Resources\Users\Pages\ListUsers;
 use App\Filament\Resources\Users\Schemas\UserForm;
 use App\Filament\Resources\Users\Tables\UsersTable;
 use App\Models\User;
+use App\Notifications\AccountInvitation;
 use BackedEnum;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -50,11 +51,18 @@ class UserResource extends Resource
     }
 
     /**
-     * Send the Laravel password-reset link so the user sets their own password.
+     * Send the dedicated invitation e-mail carrying a password-broker token so
+     * the user sets their own password. The broker still creates the token and
+     * applies its throttle; only the notification differs from "forgot password".
      */
     public static function sendPasswordSetupLink(User $user): void
     {
-        $status = Password::sendResetLink(['email' => $user->email]);
+        $status = Password::broker()->sendResetLink(
+            ['email' => $user->email],
+            function (User $user, string $token): void {
+                $user->notify(new AccountInvitation($token));
+            },
+        );
 
         if ($status === Password::RESET_LINK_SENT) {
             Notification::make()

@@ -5,6 +5,7 @@ use App\Filament\Resources\Users\Pages\EditUser;
 use App\Filament\Resources\Users\Pages\ListUsers;
 use App\Filament\Resources\Users\UserResource;
 use App\Models\User;
+use App\Notifications\AccountInvitation;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Notifications\Notification as FilamentNotification;
@@ -61,7 +62,43 @@ test('an admin creates a verified collaborator and a password setup link is sent
         ->and($user->email_verified_at)->not->toBeNull()
         ->and(strlen($user->getRawOriginal('password')))->toBeGreaterThan(20);
 
+    Notification::assertSentTo($user, AccountInvitation::class);
+    Notification::assertNotSentTo($user, ResetPassword::class);
+});
+
+test('the invitation e-mail is in french and carries the reset link', function () {
+    config(['auth.passwords.users.expire' => 45]);
+    $user = User::factory()->create(['name' => 'Camille Collab', 'email' => 'camille@example.com']);
+
+    $mail = (new AccountInvitation('jeton-de-test'))->toMail($user);
+    $url = route('password.reset', ['token' => 'jeton-de-test', 'email' => 'camille@example.com']);
+
+    expect($mail->subject)->toBe('Votre compte Veille techno a été créé')
+        ->and($mail->greeting)->toBe('Bonjour Camille Collab,')
+        ->and($mail->actionText)->toBe('Définir mon mot de passe')
+        ->and($mail->actionUrl)->toBe($url)
+        ->and($url)->toContain('/reset-password/jeton-de-test')
+        ->and($mail->introLines)->toContain('Un administrateur vient de créer votre compte sur Veille techno.')
+        ->and($mail->outroLines)->toContain('Ce lien est valable 45 minutes.')
+        ->and($mail->outroLines)->toContain('Si vous ne vous attendiez pas à cette invitation, vous pouvez ignorer cet e-mail.');
+
+    $html = (string) $mail->render();
+
+    expect($html)->toContain('Bonjour Camille Collab,')
+        ->and($html)->toContain('Définir mon mot de passe')
+        ->and($html)->toContain(e($url))
+        ->and($html)->toContain('copiez et collez');
+});
+
+test('the self-service forgot-password flow still sends the standard reset notification', function () {
+    Notification::fake();
+    $user = User::factory()->create();
+    auth()->logout();
+
+    $this->post(route('password.email'), ['email' => $user->email])->assertSessionHasNoErrors();
+
     Notification::assertSentTo($user, ResetPassword::class);
+    Notification::assertNotSentTo($user, AccountInvitation::class);
 });
 
 test('the invited collaborator sets a password with the link and logs in without email verification', function () {
@@ -78,7 +115,7 @@ test('the invited collaborator sets a password with the link and logs in without
     $user = User::where('email', 'camille@example.com')->sole();
 
     $token = null;
-    Notification::assertSentTo($user, ResetPassword::class, function (ResetPassword $notification) use (&$token) {
+    Notification::assertSentTo($user, AccountInvitation::class, function (AccountInvitation $notification) use (&$token) {
         $token = $notification->token;
 
         return true;
@@ -121,14 +158,21 @@ test('a mixed-case email is stored lowercase and the invited user resets and log
 
     expect($user->email)->toBe('prenom.nom@innosys.fr');
 
-    $token = null;
-    Notification::assertSentTo($user, ResetPassword::class, function (ResetPassword $notification) use (&$token) {
-        $token = $notification->token;
+    $link = null;
+    Notification::assertSentTo($user, AccountInvitation::class, function (AccountInvitation $notification, array $channels, User $notifiable) use (&$link) {
+        $link = $notification->toMail($notifiable)->actionUrl;
 
         return true;
     });
 
     auth()->logout();
+
+    // Follow the link from the invitation e-mail, as the user would.
+    expect($link)->toContain('/reset-password/')
+        ->and($link)->toContain('email=prenom.nom%40innosys.fr');
+    $this->get($link)->assertOk();
+
+    $token = basename(parse_url($link, PHP_URL_PATH));
 
     $this->post(route('password.update'), [
         'token' => $token,
@@ -287,7 +331,8 @@ test('the resend link action sends a new password setup link', function () {
         ->assertHasNoActionErrors()
         ->assertNotified();
 
-    Notification::assertSentTo($user, ResetPassword::class);
+    Notification::assertSentTo($user, AccountInvitation::class);
+    Notification::assertNotSentTo($user, ResetPassword::class);
 });
 
 test('resending the link twice in a row shows the throttled error in french', function () {
@@ -305,5 +350,6 @@ test('resending the link twice in a row shows the throttled error in french', fu
                 ->body('Veuillez patienter avant de réessayer.'),
         );
 
-    Notification::assertSentToTimes($user, ResetPassword::class, 1);
+    Notification::assertSentToTimes($user, AccountInvitation::class, 1);
+    Notification::assertNotSentTo($user, ResetPassword::class);
 });
