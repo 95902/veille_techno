@@ -1,6 +1,6 @@
 ---
 objective: "Un collaborateur connecté parcourt, filtre par catégorie, cherche sans accents et ouvre le détail des articles résumés."
-status: pending
+status: implemented
 ---
 
 <!-- Fill or omit these sections; never add, rename, or reorder one. -->
