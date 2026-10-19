@@ -33,8 +33,13 @@ def http_client(routes: dict[str, Route]) -> httpx.Client:
     """Client httpx servi par `routes` (URL → contenu, code HTTP ou fonction) ; sinon 404."""
 
     def handler(request: httpx.Request) -> httpx.Response:
-        # Le fragment n'est jamais envoyé au serveur.
-        route = routes.get(str(request.url.copy_with(fragment=None)))
+        # Le fragment n'est jamais envoyé au serveur. Les pages d'articles partent vers l'IP
+        # validée : l'URL demandée se reconstruit avec l'en-tête Host.
+        url = request.url.copy_with(fragment=None)
+        host = request.headers.get("host", "")
+        if host:
+            url = httpx.URL(f"{url.scheme}://{host}{url.raw_path.decode('ascii')}")
+        route = routes.get(str(url))
         if route is None:
             return httpx.Response(404, text="not found")
         if callable(route):
@@ -73,6 +78,10 @@ class FakeRepo:
         self.sources = sources
         self._categories = categories
         self.articles: list[StoredArticle] = []
+        self.locked_elsewhere = False
+
+    def try_lock(self) -> bool:
+        return not self.locked_elsewhere
 
     def active_sources(self) -> list[Source]:
         return list(self.sources)
