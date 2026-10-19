@@ -1,6 +1,6 @@
 # Testing
 
-Stratégie prévue ; aucun test n'existe encore. Commandes : `coding-assertions.md`.
+Tests de fonctionnalité Pest dans `web/tests/` (auth, réglages, back-office Filament) et tests pytest dans `worker/tests/`. Commandes : `coding-assertions.md`.
 
 ## Strategy
 

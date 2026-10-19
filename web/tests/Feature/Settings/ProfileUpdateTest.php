@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use Inertia\Testing\AssertableInertia as Assert;
 
 test('profile page is displayed', function () {
     $user = User::factory()->create();
@@ -33,6 +34,27 @@ test('profile information can be updated', function () {
     expect($user->email_verified_at)->toBeNull();
 });
 
+test('a mixed-case email is stored lowercase and checked for uniqueness case-insensitively', function () {
+    User::factory()->create(['email' => 'pris@example.com']);
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->patch(route('profile.update'), [
+            'name' => 'Test User',
+            'email' => 'Pris@Example.COM',
+        ])
+        ->assertSessionHasErrors('email');
+
+    $this->actingAs($user)
+        ->patch(route('profile.update'), [
+            'name' => 'Test User',
+            'email' => 'Prenom.Nom@Innosys.FR',
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect($user->refresh()->email)->toBe('prenom.nom@innosys.fr');
+});
+
 test('email verification status is unchanged when the email address is unchanged', function () {
     $user = User::factory()->create();
 
@@ -50,8 +72,8 @@ test('email verification status is unchanged when the email address is unchanged
     expect($user->refresh()->email_verified_at)->not->toBeNull();
 });
 
-test('user can delete their account', function () {
-    $user = User::factory()->create();
+test('a collaborator can delete their own account', function () {
+    $user = User::factory()->create(['is_admin' => false]);
 
     $response = $this
         ->actingAs($user)
@@ -83,3 +105,49 @@ test('correct password must be provided to delete account', function () {
 
     expect($user->fresh())->not->toBeNull();
 });
+
+test('an admin cannot delete their own account from the profile page', function () {
+    $admin = User::factory()->admin()->create();
+    User::factory()->admin()->create();
+
+    $response = $this
+        ->actingAs($admin)
+        ->delete(route('profile.destroy'), [
+            'password' => 'password',
+        ]);
+
+    $response->assertForbidden();
+
+    $this->assertAuthenticatedAs($admin);
+    expect($admin->fresh())->not->toBeNull();
+});
+
+test('the last admin cannot delete their own account from the profile page', function () {
+    $admin = User::factory()->admin()->create();
+
+    $response = $this
+        ->actingAs($admin)
+        ->delete(route('profile.destroy'), [
+            'password' => 'password',
+        ]);
+
+    $response->assertForbidden();
+
+    $this->assertAuthenticatedAs($admin);
+    expect($admin->fresh())->not->toBeNull()
+        ->and($admin->fresh()->is_admin)->toBeTrue();
+});
+
+test('the profile page offers account deletion to collaborators only', function (bool $isAdmin, bool $canDelete) {
+    $user = User::factory()->state(['is_admin' => $isAdmin])->create();
+
+    $this
+        ->actingAs($user)
+        ->get(route('profile.edit'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('settings/Profile')
+            ->where('canDeleteAccount', $canDelete));
+})->with([
+    'collaborator' => [false, true],
+    'admin' => [true, false],
+]);

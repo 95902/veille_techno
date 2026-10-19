@@ -101,5 +101,5 @@ const user = computed(() => page.props.auth.user);
         </Form>
     </div>
 
-    <DeleteUser />
+    <DeleteUser v-if="page.props.canDeleteAccount" />
 </template>
