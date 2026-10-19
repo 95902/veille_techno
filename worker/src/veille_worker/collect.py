@@ -20,12 +20,14 @@ import psycopg
 
 from veille_worker.config import USER_AGENT, Settings
 from veille_worker.db import (
+    URL_MAX_CHARS,
     ArticleToProcess,
     Category,
     DatabaseUnavailableError,
     NewArticle,
     Repository,
     Source,
+    url_fits,
 )
 from veille_worker.extract import NoUsableTextError, article_text
 from veille_worker.feeds import FeedError, fetch_feed, recent_entries
@@ -93,8 +95,9 @@ def collect_sources(
 ) -> None:
     """Insère les nouvelles entrées de chaque source active.
 
-    Une entrée malformée est ignorée et comptée ; une source en erreur (flux injoignable ou
-    erreur imprévue) est notée au bilan sans arrêter les autres. Une erreur de base remonte.
+    Une entrée malformée ou à l'URL trop longue pour la base est ignorée et comptée ; une
+    source en erreur (flux injoignable ou erreur imprévue) est notée au bilan sans arrêter
+    les autres. Une erreur de base remonte.
     """
     for source in repo.active_sources():
         try:
@@ -123,12 +126,22 @@ def collect_source(
     entries = recent_entries(entries, first_run=first_run, days=settings.first_run_days, now=now)
     by_url = {}
     skipped = 0
+
+    def skip(reason: str, url: str) -> None:
+        nonlocal skipped
+        skipped += 1
+        report.skipped_entries += 1
+        log(f"[source] {source.name} : entrée ignorée ({reason}) : {url[:200]!r}")
+
     for entry in entries:
         try:
             normalized = normalize_url(entry.url)
         except ValueError as exc:  # ex. port invalide : http://host:abc/
-            skipped += 1
-            log(f"[source] {source.name} : entrée ignorée ({exc}) : {entry.url!r}")
+            skip(str(exc), entry.url)
+            continue
+        if not (url_fits(entry.url) and url_fits(normalized)):
+            # Plus longue que la colonne : l'INSERT échouerait et interromprait la collecte.
+            skip(f"URL de plus de {URL_MAX_CHARS} caractères", entry.url)
             continue
         by_url.setdefault(normalized, entry)
     known = repo.known_urls(list(by_url))
@@ -150,10 +163,10 @@ def collect_source(
             )
         ):
             inserted += 1
+            # Compté à chaque insertion : une erreur plus loin dans la source ne l'efface pas.
+            report.new_articles += 1
 
     report.sources_ok.append(source.name)
-    report.new_articles += inserted
-    report.skipped_entries += skipped
     scope = "premier passage" if first_run else "suivi"
     scope += f", {settings.first_run_days} derniers jours"
     ignored = f", {skipped} ignorées" if skipped else ""

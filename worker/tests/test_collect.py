@@ -10,6 +10,7 @@ from veille_worker import collect as collect_module
 from veille_worker import extract
 from veille_worker.collect import Report, run
 from veille_worker.config import Settings
+from veille_worker.db import URL_MAX_CHARS
 from veille_worker.llm import Enrichment, LLMInvalidOutputError, LLMUnavailableError
 
 SETTINGS = Settings(max_attempts=3)
@@ -268,6 +269,53 @@ def test_malformed_entry_is_skipped_and_counted_without_stopping_the_run():
     assert report.skipped_entries == 1
     assert "Entrées ignorées (malformées) : 1" in report.lines(1.0)
     assert report.summarized == 3 and report.aborted is None
+
+
+def test_entry_with_a_url_longer_than_the_column_is_skipped_and_counted():
+    url = "https://long.example/feed.xml"
+    too_long = "https://long.example/" + "a" * (URL_MAX_CHARS - len("https://long.example/") + 1)
+    assert len(too_long) == URL_MAX_CHARS + 1
+    # Raccourcie par la normalisation (utm_*), mais l'URL brute reste trop longue.
+    raw_too_long = "https://long.example/b?utm_source=" + "x" * URL_MAX_CHARS
+    links = ["https://long.example/a", too_long, raw_too_long, "https://long.example/c"]
+    repo = FakeRepo([source(1, url), source(2, PRESS)])
+
+    report = collect(repo, FakeEnricher(), routes={**ROUTES, url: feed_with(links)})
+
+    urls = {a.normalized_url for a in repo.articles}
+    assert urls == {"https://long.example/a", "https://long.example/c", AI_ACT}
+    assert report.sources_ok == ["Source 1", "Source 2"] and report.sources_ko == []
+    assert report.skipped_entries == 2
+    assert (report.new_articles, report.summarized, report.aborted) == (3, 3, None)
+
+
+def test_url_at_the_column_limit_is_kept():
+    url = "https://long.example/feed.xml"
+    at_limit = "https://long.example/" + "a" * (URL_MAX_CHARS - len("https://long.example/"))
+    repo = FakeRepo([source(1, url)])
+
+    report = collect(repo, FakeEnricher(), routes={url: feed_with([at_limit])})
+
+    assert [a.url for a in repo.articles] == [at_limit]
+    assert report.skipped_entries == 0
+
+
+def test_articles_inserted_before_an_unexpected_source_error_are_counted():
+    class FlakyRepo(FakeRepo):
+        def insert_article(self, article):
+            if article.normalized_url.endswith("/boom"):
+                raise RuntimeError("insert crashed")
+            return super().insert_article(article)
+
+    url = "https://flaky.example/feed.xml"
+    links = ["https://flaky.example/a", "https://flaky.example/b", "https://flaky.example/boom"]
+    repo = FlakyRepo([source(1, url), source(2, PRESS)])
+
+    report = collect(repo, FakeEnricher(), routes={**ROUTES, url: feed_with(links)})
+
+    assert report.sources_ko == [("Source 1", "erreur inattendue : RuntimeError insert crashed")]
+    assert len(repo.articles) == 3
+    assert report.new_articles == 3
 
 
 def test_unexpected_source_error_marks_only_that_source_ko():

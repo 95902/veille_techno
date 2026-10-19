@@ -12,10 +12,19 @@ from datetime import UTC, datetime
 
 import psycopg
 import pytest
+from helpers import http_client
 from psycopg.rows import dict_row
 
+from veille_worker.collect import Report, collect_source
 from veille_worker.config import Settings
-from veille_worker.db import ArticleToProcess, Category, NewArticle, Repository, Source
+from veille_worker.db import (
+    URL_MAX_CHARS,
+    ArticleToProcess,
+    Category,
+    NewArticle,
+    Repository,
+    Source,
+)
 
 pytestmark = pytest.mark.db
 
@@ -146,6 +155,48 @@ def test_nul_characters_in_texts_never_reach_postgres(conn, repo, a_source):
     )
     stored = row(conn, article.normalized_url)
     assert (stored["title_fr"], stored["summary"], stored["content"]) == ("T", "Une.", "Texte")
+
+
+def padded_url(length: int) -> str:
+    prefix = f"https://pytest.invalid/{uuid.uuid4()}/"
+    return prefix + "a" * (length - len(prefix))
+
+
+def test_url_limit_matches_the_articles_columns(conn, repo, a_source):
+    at_limit = padded_url(URL_MAX_CHARS)
+    assert repo.insert_article(new_article(a_source, url=at_limit, normalized_url=at_limit))
+
+    for column in ("url", "normalized_url"):
+        too_long = padded_url(URL_MAX_CHARS + 1)
+        article = new_article(a_source, **{column: too_long})
+        with pytest.raises(psycopg.errors.StringDataRightTruncation), conn.transaction():
+            repo.insert_article(article)
+
+
+def test_collect_skips_over_long_urls_and_keeps_long_titles(conn, repo, a_source):
+    feed_url = f"https://pytest.invalid/{uuid.uuid4()}/feed.xml"
+    kept, too_long = padded_url(200), padded_url(URL_MAX_CHARS + 1)
+    long_title = "Titre très long " * 5000  # colonne text : aucune troncature nécessaire
+    date = "Mon, 19 Oct 2026 11:00:00 GMT"
+    items = "".join(
+        f"<item><title>{title}</title><link>{link}</link><pubDate>{date}</pubDate>"
+        f"<description>Texte du flux.</description></item>"
+        for title, link in ((long_title, kept), ("Trop long", too_long))
+    )
+    feed = f'<?xml version="1.0"?><rss version="2.0"><channel><title>T</title>{items}' \
+        "</channel></rss>"
+    source = Source(a_source.id, "pytest", feed_url, "rss", max_items_per_run=20)
+    report = Report()
+
+    collect_source(
+        repo, http_client({feed_url: feed.encode()}), Settings(),
+        datetime(2026, 10, 19, 12, 0, tzinfo=UTC), report, source,
+    )
+
+    assert report.sources_ok == ["pytest"] and report.skipped_entries == 1
+    assert report.new_articles == 1
+    assert row(conn, kept)["title"] == long_title.strip()
+    assert repo.known_urls([too_long]) == set()
 
 
 @pytest.mark.parametrize(

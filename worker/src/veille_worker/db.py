@@ -15,6 +15,18 @@ from veille_worker.config import Settings
 # Clé fixe du verrou consultatif de session qui sérialise les collectes (cron et manuelles).
 COLLECT_LOCK_KEY = 7_265_100_001
 
+# Seules colonnes de longueur bornée que le worker remplit avec des données tierces :
+# articles.url et articles.normalized_url sont des varchar(2048), cf.
+# web/database/migrations/2026_10_19_150002_create_articles_table.php. Les autres textes
+# écrits (title, title_fr, content, summary, last_error) sont des colonnes text, et status
+# ne reçoit que des valeurs fixes du worker. À garder aligné sur la migration.
+URL_MAX_CHARS = 2048
+
+
+def url_fits(url: str) -> bool:
+    """L'URL tient dans articles.url / normalized_url (longueur en caractères, comme Postgres)."""
+    return len(clean_text(url) or "") <= URL_MAX_CHARS
+
 
 def clean_text(value: str | None) -> str | None:
     """Texte sans caractère NUL : Postgres le refuse dans un champ text (psycopg.DataError).

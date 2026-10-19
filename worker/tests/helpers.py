@@ -6,8 +6,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
+import psycopg
 
-from veille_worker.db import ArticleToProcess, Category, NewArticle, Source
+from veille_worker.db import URL_MAX_CHARS, ArticleToProcess, Category, NewArticle, Source
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -96,6 +97,9 @@ class FakeRepo:
         return {a.normalized_url for a in self.articles} & set(normalized_urls)
 
     def insert_article(self, article: NewArticle) -> bool:
+        if max(len(article.url), len(article.normalized_url)) > URL_MAX_CHARS:
+            # Comme Postgres sur un varchar(2048) : l'erreur interromprait la collecte.
+            raise psycopg.errors.StringDataRightTruncation("value too long for varchar(2048)")
         if article.normalized_url in {a.normalized_url for a in self.articles}:
             return False
         self.articles.append(StoredArticle(id=len(self.articles) + 1, **vars(article)))
