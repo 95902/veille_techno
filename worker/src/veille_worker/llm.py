@@ -76,6 +76,9 @@ ENRICH_SYSTEM_PROMPT = (
 )
 
 FALLBACK_CATEGORY = "autre"
+# Bornes partagées par le schéma imposé à vLLM et la revalidation Python.
+TITLE_MAX_CHARS = 300
+SENTENCE_MAX_CHARS = 500
 
 
 def enrichment_schema(slugs: list[str]) -> dict[str, Any]:
@@ -85,12 +88,12 @@ def enrichment_schema(slugs: list[str]) -> dict[str, Any]:
         "additionalProperties": False,
         "required": ["title_fr", "summary", "category"],
         "properties": {
-            "title_fr": {"type": "string", "minLength": 1, "maxLength": 300},
+            "title_fr": {"type": "string", "minLength": 1, "maxLength": TITLE_MAX_CHARS},
             "summary": {
                 "type": "array",
                 "minItems": 3,
                 "maxItems": 3,
-                "items": {"type": "string", "minLength": 1, "maxLength": 500},
+                "items": {"type": "string", "minLength": 1, "maxLength": SENTENCE_MAX_CHARS},
             },
             "category": {"type": "string", "enum": slugs},
         },
@@ -171,6 +174,10 @@ def parse_enrichment(content: str, slugs: list[str]) -> Enrichment:
     title_fr = data.get("title_fr")
     if not isinstance(title_fr, str) or not title_fr.strip():
         raise LLMInvalidOutputError("title_fr manquant ou vide")
+    if len(title_fr) > TITLE_MAX_CHARS:
+        raise LLMInvalidOutputError(
+            f"title_fr trop long ({len(title_fr)} caractères, maximum {TITLE_MAX_CHARS})"
+        )
 
     summary = data.get("summary")
     if (
@@ -179,6 +186,12 @@ def parse_enrichment(content: str, slugs: list[str]) -> Enrichment:
         or not all(isinstance(s, str) and s.strip() for s in summary)
     ):
         raise LLMInvalidOutputError("summary doit contenir exactement 3 phrases non vides")
+    for sentence in summary:
+        if len(sentence) > SENTENCE_MAX_CHARS:
+            raise LLMInvalidOutputError(
+                f"phrase de résumé trop longue ({len(sentence)} caractères,"
+                f" maximum {SENTENCE_MAX_CHARS})"
+            )
 
     category = data.get("category")
     if category not in slugs:

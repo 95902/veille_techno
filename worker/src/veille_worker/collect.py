@@ -4,6 +4,8 @@ Usage : python -m veille_worker.collect
 
 Code de sortie : 0 si la collecte a tourné (même avec des sources ou articles en échec),
 1 si la base ou vLLM sont indisponibles (les articles restent en base pour la prochaine passe).
+Une seule collecte à la fois (verrou consultatif Postgres) : si une autre tourne déjà, la
+commande l'annonce et sort avec 0 sans rien faire.
 """
 
 import sys
@@ -40,6 +42,7 @@ Enricher = Callable[[str, str, list[Category]], Enrichment]
 
 
 class Repo(Protocol):
+    def try_lock(self) -> bool: ...
     def active_sources(self) -> list[Source]: ...
     def categories(self) -> list[Category]: ...
     def has_articles(self, source_id: int) -> bool: ...
@@ -59,7 +62,9 @@ class Report:
     new_articles: int = 0
     summarized: int = 0
     failed: int = 0
+    skipped_entries: int = 0
     aborted: str | None = None
+    already_running: bool = False
 
     def lines(self, duration: float) -> list[str]:
         out = [
@@ -69,6 +74,7 @@ class Report:
         out += [f"  ✗ {name} : {error}" for name, error in self.sources_ko]
         out += [
             f"Nouveaux articles : {self.new_articles}",
+            f"Entrées ignorées (malformées) : {self.skipped_entries}",
             f"Résumés : {self.summarized}",
             f"Échecs : {self.failed}",
             f"Durée : {duration:.0f} s",
@@ -85,47 +91,76 @@ def log(message: str) -> None:
 def collect_sources(
     repo: Repo, client: httpx.Client, settings: Settings, now: datetime, report: Report
 ) -> None:
-    """Insère les nouvelles entrées de chaque source active ; une source en erreur est notée."""
+    """Insère les nouvelles entrées de chaque source active.
+
+    Une entrée malformée est ignorée et comptée ; une source en erreur (flux injoignable ou
+    erreur imprévue) est notée au bilan sans arrêter les autres. Une erreur de base remonte.
+    """
     for source in repo.active_sources():
         try:
-            entries = fetch_feed(source.feed_url, client)
+            collect_source(repo, client, settings, now, report, source)
+        except psycopg.Error:
+            raise
         except FeedError as exc:
             report.sources_ko.append((source.name, str(exc)))
             log(f"[source] {source.name} : ERREUR {exc}")
+        except Exception as exc:  # flux tiers : une erreur imprévue ne bloque que sa source
+            error = f"erreur inattendue : {exc.__class__.__name__} {exc}"
+            report.sources_ko.append((source.name, error))
+            log(f"[source] {source.name} : ERREUR {error}")
+
+
+def collect_source(
+    repo: Repo,
+    client: httpx.Client,
+    settings: Settings,
+    now: datetime,
+    report: Report,
+    source: Source,
+) -> None:
+    entries = fetch_feed(source.feed_url, client)
+    first_run = not repo.has_articles(source.id)
+    entries = recent_entries(entries, first_run=first_run, days=settings.first_run_days, now=now)
+    by_url = {}
+    skipped = 0
+    for entry in entries:
+        try:
+            normalized = normalize_url(entry.url)
+        except ValueError as exc:  # ex. port invalide : http://host:abc/
+            skipped += 1
+            log(f"[source] {source.name} : entrée ignorée ({exc}) : {entry.url!r}")
             continue
+        by_url.setdefault(normalized, entry)
+    known = repo.known_urls(list(by_url))
 
-        first_run = not repo.has_articles(source.id)
-        entries = recent_entries(
-            entries, first_run=first_run, days=settings.first_run_days, now=now
-        )
-        by_url = {}
-        for entry in entries:
-            by_url.setdefault(normalize_url(entry.url), entry)
-        known = repo.known_urls(list(by_url))
+    inserted = 0
+    for normalized, entry in by_url.items():
+        if inserted >= source.max_items_per_run:
+            break
+        if normalized in known:
+            continue
+        if repo.insert_article(
+            NewArticle(
+                source_id=source.id,
+                url=entry.url,
+                normalized_url=normalized,
+                title=entry.title,
+                content=entry.content,
+                published_at=entry.published_at,
+            )
+        ):
+            inserted += 1
 
-        inserted = 0
-        for normalized, entry in by_url.items():
-            if inserted >= source.max_items_per_run:
-                break
-            if normalized in known:
-                continue
-            if repo.insert_article(
-                NewArticle(
-                    source_id=source.id,
-                    url=entry.url,
-                    normalized_url=normalized,
-                    title=entry.title,
-                    content=entry.content,
-                    published_at=entry.published_at,
-                )
-            ):
-                inserted += 1
-
-        report.sources_ok.append(source.name)
-        report.new_articles += inserted
-        scope = "premier passage" if first_run else "suivi"
-        scope += f", {settings.first_run_days} derniers jours"
-        log(f"[source] {source.name} : {len(entries)} entrées ({scope}), {inserted} nouvelles")
+    report.sources_ok.append(source.name)
+    report.new_articles += inserted
+    report.skipped_entries += skipped
+    scope = "premier passage" if first_run else "suivi"
+    scope += f", {settings.first_run_days} derniers jours"
+    ignored = f", {skipped} ignorées" if skipped else ""
+    log(
+        f"[source] {source.name} : {len(entries)} entrées ({scope}), {inserted} nouvelles"
+        f"{ignored}"
+    )
 
 
 def process_articles(
@@ -138,7 +173,9 @@ def process_articles(
 ) -> None:
     """Résume les articles pending et les failed sous le plafond d'essais.
 
-    LLMUnavailableError remonte : l'article courant n'est pas compté comme un essai.
+    LLMUnavailableError et psycopg.Error remontent : l'article courant n'est pas compté
+    comme un essai. Toute autre erreur (extraction, sortie LLM, imprévue) le passe en échec
+    pour cet essai, et la collecte continue avec les suivants.
     """
     category_ids = {c.slug: c.id for c in categories}
     articles = repo.articles_to_process(settings.max_attempts)
@@ -156,17 +193,25 @@ def process_articles(
                 max_chars=settings.max_input_chars,
             )
             result = enrich(text, article.title, categories)
-        except (NoUsableTextError, LLMInvalidOutputError) as exc:
-            repo.mark_failed(article.id, str(exc), content=text)
+            category_id = category_ids[result.category]
+        except (LLMUnavailableError, psycopg.Error):
+            raise
+        except Exception as exc:
+            error = (
+                str(exc)
+                if isinstance(exc, NoUsableTextError | LLMInvalidOutputError)
+                else f"erreur inattendue : {exc.__class__.__name__} {exc}"
+            )
+            repo.mark_failed(article.id, error, content=text)
             report.failed += 1
-            log(f"[llm] {index}/{len(articles)} #{article.id} ÉCHEC : {exc}")
+            log(f"[llm] {index}/{len(articles)} #{article.id} ÉCHEC : {error}")
             continue
 
         repo.mark_summarized(
             article.id,
             title_fr=result.title_fr,
             summary="\n".join(result.summary),
-            category_id=category_ids[result.category],
+            category_id=category_id,
             content=text,
         )
         report.summarized += 1
@@ -181,6 +226,9 @@ def run(
     now: datetime | None = None,
 ) -> Report:
     report = Report()
+    if not repo.try_lock():
+        report.already_running = True
+        return report
     categories = repo.categories()
     if not categories:
         report.aborted = "aucune catégorie en base (lancer les seeders Laravel)"
@@ -222,8 +270,11 @@ def main() -> int:
         print(f"Erreur : base indisponible en cours de collecte : {exc}", file=sys.stderr)
         return 1
     finally:
-        repo.close()
+        repo.close()  # libère aussi le verrou consultatif
 
+    if report.already_running:
+        log("collecte déjà en cours : rien à faire")
+        return 0
     for line in report.lines(time.monotonic() - started):
         log(line)
     if report.aborted:

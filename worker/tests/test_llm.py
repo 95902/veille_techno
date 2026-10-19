@@ -118,6 +118,9 @@ def test_enrich_prompt_lists_categories_with_descriptions_and_the_article():
          "exactement 3 phrases"),
         (json.dumps({**VALID, "summary": ["Une.", " ", "Trois."]}), "exactement 3 phrases"),
         (json.dumps({**VALID, "title_fr": ""}), "title_fr"),
+        (json.dumps({**VALID, "title_fr": "T" * 301}), "title_fr trop long"),
+        (json.dumps({**VALID, "summary": ["Une.", "D" * 501, "Trois."]}),
+         "phrase de résumé trop longue"),
     ],
 )
 def test_output_outside_the_schema_is_rejected(content, error):
@@ -148,3 +151,11 @@ def test_enrich_connection_error_is_an_outage():
 
     with pytest.raises(LLMUnavailableError, match="vLLM injoignable"):
         enrich_fr("x", "t", CATEGORIES, settings=SETTINGS, client=client)
+
+
+def test_outputs_at_the_schema_bounds_are_accepted():
+    content = json.dumps({**VALID, "title_fr": "T" * 300, "summary": ["U" * 500] * 3})
+
+    result = parse_enrichment(content, SLUGS)
+
+    assert len(result.title_fr) == 300 and all(len(s) == 500 for s in result.summary)

@@ -12,6 +12,17 @@ from psycopg.rows import dict_row
 
 from veille_worker.config import Settings
 
+# Clé fixe du verrou consultatif de session qui sérialise les collectes (cron et manuelles).
+COLLECT_LOCK_KEY = 7_265_100_001
+
+
+def clean_text(value: str | None) -> str | None:
+    """Texte sans caractère NUL : Postgres le refuse dans un champ text (psycopg.DataError).
+
+    Toute valeur texte écrite par Repository passe par ici (flux, page extraite, sortie LLM).
+    """
+    return value.replace("\x00", "") if value is not None else None
+
 
 class DatabaseUnavailableError(RuntimeError):
     """La base est injoignable ou refuse la connexion."""
@@ -81,6 +92,16 @@ class Repository:
     def close(self) -> None:
         self.conn.close()
 
+    def try_lock(self) -> bool:
+        """Prend le verrou de collecte pour la session ; False si une autre collecte le tient.
+
+        Verrou de session : libéré à la fermeture de la connexion (fin du processus compris).
+        """
+        row = self.conn.execute(
+            "SELECT pg_try_advisory_lock(%s) AS locked", (COLLECT_LOCK_KEY,)
+        ).fetchone()
+        return bool(row and row["locked"])
+
     def active_sources(self) -> list[Source]:
         rows = self.conn.execute(
             "SELECT id, name, feed_url, type, max_items_per_run FROM sources"
@@ -118,10 +139,10 @@ class Repository:
             " ON CONFLICT (normalized_url) DO NOTHING",
             (
                 article.source_id,
-                article.url,
-                article.normalized_url,
-                article.title,
-                article.content,
+                clean_text(article.url),
+                clean_text(article.normalized_url),
+                clean_text(article.title),
+                clean_text(article.content),
                 article.published_at,
             ),
         )
@@ -150,12 +171,18 @@ class Repository:
             "UPDATE articles SET status = 'summarized', title_fr = %s, summary = %s,"
             " category_id = %s, content = %s, attempts = attempts + 1, last_error = NULL,"
             " updated_at = now() WHERE id = %s",
-            (title_fr, summary, category_id, content, article_id),
+            (
+                clean_text(title_fr),
+                clean_text(summary),
+                category_id,
+                clean_text(content),
+                article_id,
+            ),
         )
 
     def mark_failed(self, article_id: int, error: str, content: str | None = None) -> None:
         self.conn.execute(
             "UPDATE articles SET status = 'failed', attempts = attempts + 1, last_error = %s,"
             " content = COALESCE(%s, content), updated_at = now() WHERE id = %s",
-            (error[:2000], content, article_id),
+            ((clean_text(error) or "")[:2000], clean_text(content), article_id),
         )

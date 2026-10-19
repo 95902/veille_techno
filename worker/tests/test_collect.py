@@ -2,9 +2,12 @@ from datetime import UTC, datetime
 from email.utils import format_datetime
 
 import httpx
+import psycopg
 import pytest
 from helpers import CATEGORIES, NOW, FakeRepo, fixture, http_client, source
 
+from veille_worker import collect as collect_module
+from veille_worker import extract
 from veille_worker.collect import Report, run
 from veille_worker.config import Settings
 from veille_worker.llm import Enrichment, LLMInvalidOutputError, LLMUnavailableError
@@ -239,3 +242,97 @@ def test_no_category_aborts_before_collecting():
 
     assert report.aborted and "catégorie" in report.aborted
     assert repo.articles == []
+
+
+def feed_with(links: list[str]) -> bytes:
+    date = format_datetime(datetime(2026, 10, 19, 11, 0, tzinfo=UTC))
+    items = "".join(
+        f"<item><title>Post {i}</title><link>{link}</link><pubDate>{date}</pubDate>"
+        f"<description>{'Feed text long enough to summarize. ' * 10}</description></item>"
+        for i, link in enumerate(links)
+    )
+    return f'<?xml version="1.0"?><rss version="2.0"><channel><title>T</title>{items}' \
+        f"</channel></rss>".encode()
+
+
+def test_malformed_entry_is_skipped_and_counted_without_stopping_the_run():
+    url = "https://mixed.example/feed.xml"
+    links = ["https://mixed.example/a", "http://host:abc/broken", "https://mixed.example/b"]
+    repo = FakeRepo([source(1, url), source(2, PRESS)])
+
+    report = collect(repo, FakeEnricher(), routes={**ROUTES, url: feed_with(links)})
+
+    urls = {a.normalized_url for a in repo.articles}
+    assert urls == {"https://mixed.example/a", "https://mixed.example/b", AI_ACT}
+    assert report.sources_ok == ["Source 1", "Source 2"]
+    assert report.skipped_entries == 1
+    assert "Entrées ignorées (malformées) : 1" in report.lines(1.0)
+    assert report.summarized == 3 and report.aborted is None
+
+
+def test_unexpected_source_error_marks_only_that_source_ko():
+    def explode(request):
+        raise RuntimeError("parser crashed")
+
+    repo = FakeRepo(sources())
+
+    report = collect(repo, FakeEnricher(), routes={**ROUTES, LAB: explode})
+
+    assert report.sources_ko == [("Source 1", "erreur inattendue : RuntimeError parser crashed")]
+    assert report.sources_ok == ["Source 2", "Source 3"]
+    assert report.summarized == 2 and report.aborted is None
+
+
+def test_poisoned_article_is_marked_failed_and_later_articles_are_processed(monkeypatch):
+    real_extract = extract.trafilatura.extract
+
+    def poisoned(page, url, **kwargs):
+        if "model-x" in url:
+            raise TypeError("trafilatura exploded")
+        return real_extract(page, url=url, **kwargs)
+
+    monkeypatch.setattr(extract.trafilatura, "extract", poisoned)
+    repo = FakeRepo(sources())
+    title = "EU & the AI Act: what changes in 2027"
+    enricher = FakeEnricher({title: KeyError("unexpected")})
+
+    report = collect(repo, enricher)
+
+    model_x, ai_act = repo.by_url(MODEL_X), repo.by_url(AI_ACT)
+    assert (model_x.status, model_x.attempts) == ("failed", 1)
+    assert model_x.last_error == "erreur inattendue : TypeError trafilatura exploded"
+    assert (ai_act.status, ai_act.attempts) == ("failed", 1)
+    assert ai_act.last_error.startswith("erreur inattendue : KeyError")
+    assert (report.summarized, report.failed) == (3, 2)
+    assert repo.by_url(PAPER).status == "summarized"
+
+
+def test_database_error_during_processing_aborts_without_penalty():
+    repo = FakeRepo(sources())
+    enricher = FakeEnricher({"Introducing Model X": psycopg.OperationalError("db gone")})
+
+    with pytest.raises(psycopg.OperationalError):
+        collect(repo, enricher)
+
+    assert (repo.by_url(MODEL_X).status, repo.by_url(MODEL_X).attempts) == ("pending", 0)
+
+
+def test_concurrent_run_exits_without_doing_anything():
+    repo = FakeRepo(sources())
+    repo.locked_elsewhere = True
+    enricher = FakeEnricher()
+
+    report = collect(repo, enricher)
+
+    assert report.already_running and report.aborted is None
+    assert repo.articles == [] and enricher.calls == []
+
+
+def test_main_reports_already_running_and_exits_zero(monkeypatch, capsys):
+    repo = FakeRepo(sources())
+    repo.locked_elsewhere = True
+    repo.close = lambda: None
+    monkeypatch.setattr(collect_module.Repository, "connect", classmethod(lambda cls, s: repo))
+
+    assert collect_module.main() == 0
+    assert "collecte déjà en cours" in capsys.readouterr().out

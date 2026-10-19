@@ -26,6 +26,7 @@ build-backend = "uv_build"
 testpaths = ["tests"]
 markers = [
     "slow: appelle des services réels (vLLM) ; exclure avec -m \"not slow\"",
+    "db: SQL réel contre le Postgres de Compose (veille_worker) ; ignoré sans WORKER_DB_PASSWORD",
 ]
 
 [tool.ruff]
