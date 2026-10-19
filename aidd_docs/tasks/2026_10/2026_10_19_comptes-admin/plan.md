@@ -1,6 +1,6 @@
 ---
 objective: "Seuls les admins accèdent à /admin ; le premier admin se crée par commande ; les admins gèrent les comptes collaborateurs dans Filament avec un lien de définition du mot de passe."
-status: pending
+status: implemented
 ---
 
 # Plan: Comptes admin
@@ -34,3 +34,10 @@ status: pending
 | -------- | --- |
 | Action « Renvoyer le lien » sur chaque compte de la liste | le jeton expire en 60 min ; renvoyer le lien évite d'allonger la durée pour toutes les réinitialisations |
 | Garde-fous dans une règle métier unique (policy `UserPolicy`) appliquée par Filament | une seule source de vérité, testable sans l'interface |
+
+## Amendement 2026-10-19
+
+Décidé à la pause sur le résultat :
+
+- La suppression de compte de `/settings/profile` passe par `UserPolicy::deleteOwnAccount` : un collaborateur peut supprimer son compte, un admin non (403 avant déconnexion, section masquée).
+- Locale par défaut `fr` dans `web/config/app.php` pour traduire les textes de Filament.
