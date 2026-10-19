@@ -38,7 +38,7 @@ Date : 2026-10-19. Branche `feat/pages-lecture`, rien commité. `W` = `docker co
 ### 5. Détail
 
 - Pest : « the detail page shows a summarized article » (titre FR, titre d'origine, résumé, source, catégorie, url, date ; ni `content` ni `last_error`) ; « the detail of an article not summarized is not found » (pending, failed → 404).
-- Base réelle : `/articles/114?categorie=securite&q=sécurité` depuis une carte (`07-…`) : lien d'origine `target="_blank"`, `rel="noopener noreferrer"` ; « Retour à la liste » garde `categorie` et `q`. `/articles/73` (`08-…`) : titre FR + « Titre d'origine : JB Pritzker thinks AI could help us live to 100 — or threaten us like nukes ».
+- Base réelle : `/articles/114?categorie=securite&q=sécurité` depuis une carte (`07-…`, prise avant l'ajout de la ligne « Titre d'origine » ; l'écran actuel est celui de `08-…`) : lien d'origine `target="_blank"`, `rel="noopener noreferrer"` ; « Retour à la liste » garde `categorie` et `q`. `/articles/73` (`08-…`) : titre FR + « Titre d'origine : JB Pritzker thinks AI could help us live to 100 — or threaten us like nukes ».
 - Pas d'article pending/failed dans la base reconstruite : le 404 n'est prouvé qu'en Pest.
 
 ### 6. Migration sur la base réelle sans casser le worker
