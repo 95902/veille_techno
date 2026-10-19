@@ -83,7 +83,7 @@ test('a collaborator can delete their own account', function () {
 
     $response
         ->assertSessionHasNoErrors()
-        ->assertRedirect(route('home'));
+        ->assertRedirect(route('articles.index'));
 
     $this->assertGuest();
     expect($user->fresh())->toBeNull();

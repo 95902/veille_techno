@@ -84,7 +84,7 @@ test('it stores a mixed-case email lowercase on creation', function () {
     $this->post(route('login.store'), [
         'email' => 'Prenom.Nom@Innosys.FR',
         'password' => 'secret-password',
-    ])->assertRedirect(route('dashboard', absolute: false));
+    ])->assertRedirect(route('articles.index', absolute: false));
 
     $this->assertAuthenticatedAs(User::sole());
 });

@@ -19,7 +19,7 @@ test('users can authenticate using the login screen', function () {
     ]);
 
     $this->assertAuthenticated();
-    $response->assertRedirect(route('dashboard', absolute: false));
+    $response->assertRedirect(route('articles.index', absolute: false));
 });
 
 test('users with two factor enabled are redirected to two factor challenge', function () {
@@ -58,7 +58,7 @@ test('users can logout', function () {
 
     $response = $this->actingAs($user)->post(route('logout'));
 
-    $response->assertRedirect(route('home'));
+    $response->assertRedirect(route('articles.index'));
 
     $this->assertGuest();
 });

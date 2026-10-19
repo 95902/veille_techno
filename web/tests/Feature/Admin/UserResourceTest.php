@@ -135,12 +135,12 @@ test('the invited collaborator sets a password with the link and logs in without
     $this->post(route('login.store'), [
         'email' => 'camille@example.com',
         'password' => 'nouveau-mot-de-passe',
-    ])->assertRedirect(route('dashboard', absolute: false));
+    ])->assertRedirect(route('articles.index', absolute: false));
 
     $this->assertAuthenticatedAs($user);
 
-    // The dashboard sits behind the `verified` middleware: no verification step.
-    $this->get(route('dashboard'))->assertOk();
+    // The article list sits behind the `verified` middleware: no verification step.
+    $this->get(route('articles.index'))->assertOk();
 });
 
 test('a mixed-case email is stored lowercase and the invited user resets and logs in with it', function () {
@@ -184,10 +184,10 @@ test('a mixed-case email is stored lowercase and the invited user resets and log
     $this->post(route('login.store'), [
         'email' => 'Prenom.Nom@Innosys.FR',
         'password' => 'nouveau-mot-de-passe',
-    ])->assertRedirect(route('dashboard', absolute: false));
+    ])->assertRedirect(route('articles.index', absolute: false));
 
     $this->assertAuthenticatedAs($user);
-    $this->get(route('dashboard'))->assertOk();
+    $this->get(route('articles.index'))->assertOk();
 });
 
 test('creating a user with a mixed-case variant of a taken email fails validation', function () {
