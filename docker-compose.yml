@@ -1,0 +1,123 @@
+name: veille_techno
+
+services:
+  nginx:
+    image: nginx:1.29-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./web:/var/www/web:ro
+    depends_on:
+      - app
+
+  app:
+    build: ./infra/php
+    restart: unless-stopped
+    # PHP-FPM tourne avec l'UID de l'hôte pour écrire dans storage/ et bootstrap/cache.
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    environment:
+      APP_KEY: ${APP_KEY}
+      # nginx est publié sur le LAN : production et debug coupé par défaut, ces valeurs priment sur web/.env.
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_URL: http://localhost
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: ${POSTGRES_DB}
+      DB_USERNAME: veille_app
+      DB_PASSWORD: ${APP_DB_PASSWORD}
+    volumes:
+      - ./web:/var/www/web
+    # Port FastCGI 9000 joignable seulement par nginx sur le réseau Compose, jamais publié.
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      WORKER_DB_PASSWORD: ${WORKER_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # -h 127.0.0.1 : passe par TCP, donc seulement après les scripts d'init (le serveur
+      # temporaire d'init n'écoute que sur le socket Unix).
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  vllm:
+    # v0.28.0, CUDA 13.0.2 : version validée sur la RTX 5070 (sm_120). Figée par digest, jamais :latest.
+    image: vllm/vllm-openai@sha256:61fc8a896b0a4fbbbdc063bc4b0dbc25ce98e02b5050c24aeb7830ac02039b14
+    restart: unless-stopped
+    command:
+      - ${VLLM_MODEL}
+      - --max-model-len
+      - "${VLLM_MAX_MODEL_LEN}"
+      - --gpu-memory-utilization
+      - "${VLLM_GPU_MEMORY_UTILIZATION}"
+      - --reasoning-parser
+      - qwen3
+    environment:
+      # 0 au premier démarrage d'un modèle (téléchargement dans hf_cache), 1 ensuite pour
+      # ne plus jamais contacter Hugging Face (voir infra/vllm/README.md).
+      HF_HUB_OFFLINE: "${VLLM_HF_HUB_OFFLINE:-0}"
+    volumes:
+      # Cache Hugging Face propre au projet (poids des modèles), en lecture-écriture.
+      - hf_cache:/root/.cache/huggingface
+      # Cache torch.compile/FlashInfer : sans lui, chaque recréation recompile et le premier
+      # démarrage manque de VRAM pour le KV cache (redémarrage automatique ensuite).
+      - vllm_compile_cache:/root/.cache/vllm
+    ports:
+      - "127.0.0.1:8000:8000"
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 600s
+
+  worker-py:
+    build: ./worker
+    # Hors du `docker compose up` par défaut (profil tools). Lancé à la demande (puis par cron) :
+    #   docker compose run --rm worker-py python -m veille_worker.smoke
+    profiles: ["tools"]
+    restart: "no"
+    # Liste explicite : le worker ne reçoit ni le mot de passe superutilisateur, ni celui de
+    # veille_app, ni APP_KEY.
+    environment:
+      VLLM_MODEL: ${VLLM_MODEL}
+      VLLM_BASE_URL: http://vllm:8000/v1
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: ${POSTGRES_DB}
+      DB_USERNAME: veille_worker
+      WORKER_DB_PASSWORD: ${WORKER_DB_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      vllm:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  vllm_compile_cache:
+  hf_cache:

@@ -37,6 +37,7 @@ flowchart LR
 ## Gotchas
 
 - RTX 5070 (Blackwell, sm_120) : vLLM exige CUDA ≥ 12.8 ; les images officielles ont longtemps planté (« no kernel image »). Toujours figer une image déjà validée sur la carte, jamais `:latest`.
-- vLLM réserve par défaut 90 % de la VRAM : régler `--gpu-memory-utilization` (~0,85) et `--max-model-len` (8 à 16k). 12 Go limitent aux modèles 7-9B en FP8 ou 12-14B en 4 bits.
+- VRAM 12 Go : Qwen3-14B-AWQ ne charge pas (OOM à la conversion AWQ). Modèle retenu Qwen3-8B-AWQ, `--gpu-memory-utilization 0.80` (0.85 tombe en OOM au warm-up). Détails : `infra/vllm/README.md`.
+- Qwen3 raisonne par défaut : servir avec `--reasoning-parser qwen3` et envoyer `enable_thinking: false` à chaque requête.
 - Recherche plein texte : la config `french` seule ne gère pas les accents, il faut une configuration personnalisée avec `unaccent`.
 - Une seule machine, sans redondance : la sauvegarde `pg_dump` quotidienne vers un autre disque est la seule parade.
