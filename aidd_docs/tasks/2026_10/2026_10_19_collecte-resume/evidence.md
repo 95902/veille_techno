@@ -194,7 +194,7 @@ Les 99 articles hors fenêtre déjà insérés (`id > 111`, `status = 'pending'`
 
 ## 6. Gates
 
-Relancés le 2026-10-19 après les corrections de la revue r-69a1.
+Relancés le 2026-10-19 après les corrections de la revue, round 2 (URL plus longue que la colonne, comptage incrémental des nouveaux articles).
 
 | Commande | Résultat |
 | -------- | -------- |
@@ -202,7 +202,107 @@ Relancés le 2026-10-19 après les corrections de la revue r-69a1.
 | `npm run lint` | 0 avertissement, 0 erreur |
 | `uv run ruff check .` | All checks passed |
 | `pest` | 112 tests, 509 assertions, PASS |
-| `uv run pytest -m "not slow"` (sans base) | 106 passed, 9 skipped (`db`) |
-| `uv run pytest -m db` (Postgres de Compose, `veille_worker`) | 9 passed, aucune ligne laissée en base |
-| `uv run pytest` (vLLM démarré) | non relancé (vLLM arrêté) ; dernier passage : 63 passed dont 2 `slow` |
+| `uv run pytest -m "not slow"` (sans base) | 111 passed, 12 skipped (`db`) |
+| `uv run pytest -m db` (Postgres de Compose, `veille_worker`) | 12 passed, aucune ligne laissée en base |
+| `uv run pytest` (vLLM démarré) | non relancé ; dernier passage : 63 passed dont 2 `slow` |
 | `npm run build` | OK |
+
+Contrôle des nouveaux tests sur le code d'avant la correction : les 2 tests unitaires (URL de 2 049 caractères ignorée et comptée ; nouveaux articles comptés avant une erreur imprévue de la source) et le test `db` de collecte échouent (`StringDataRightTruncation: value too long for type character varying(2048)`), puis passent après.
+
+## 7. Re-preuve sur head corrigé (2026-10-19)
+
+Code : `d253cce` plus les corrections round 2 non commitées (`collect.py`, `db.py`, tests). Image `veille_techno-worker` reconstruite (`docker compose build worker-cron`, même image que `worker-py`), puis `docker compose up -d --wait` : les 5 services `Up`, Postgres et vLLM `healthy`. Base réelle avant passage : 130 articles (99 `summarized`, 11 `failed`, 20 `pending`). OpenAI News est inactive en base (10 sources actives) ; ses 11 articles `failed` sont au plafond de 3 essais et ne sont plus retentés.
+
+### Première collecte manuelle
+
+`docker compose run --rm worker-py python -m veille_worker.collect` — 85 s au total (conteneur compris), code de sortie 0.
+
+```text
+[source] Google DeepMind : 5 entrées (suivi, 7 derniers jours), 0 nouvelles
+[source] Hugging Face Blog : 8 entrées (suivi, 7 derniers jours), 0 nouvelles
+[source] arXiv cs.AI : 344 entrées (suivi, 7 derniers jours), 10 nouvelles
+[source] arXiv cs.CL : 226 entrées (suivi, 7 derniers jours), 10 nouvelles
+[source] Hacker News (IA, 100 points) : 20 entrées (suivi, 7 derniers jours), 0 nouvelles
+[source] The Verge – IA : 10 entrées (suivi, 7 derniers jours), 1 nouvelles
+[source] MIT Technology Review – IA : 4 entrées (suivi, 7 derniers jours), 0 nouvelles
+[source] Simon Willison : 18 entrées (suivi, 7 derniers jours), 0 nouvelles
+[source] ActuIA : 9 entrées (suivi, 7 derniers jours), 0 nouvelles
+[source] Le Monde Informatique – IA : 4 entrées (suivi, 7 derniers jours), 0 nouvelles
+[llm] 41 article(s) à résumer
+[llm] 1/41 #284 [securite] Un hackeur a pénétré John Deere et SharkNinja grâce à une armée d'agents d'IA
+…
+=== Bilan de la collecte ===
+Sources : 10 OK, 0 en erreur
+Nouveaux articles : 21
+Entrées ignorées (malformées) : 0
+Résumés : 41
+Échecs : 0
+Durée : 84 s
+```
+
+Les 41 résumés = les 20 articles arXiv `pending` + les 21 nouveaux. Base après passage : 151 articles (140 `summarized`, 11 `failed`, 0 `pending`), 151 `normalized_url` distinctes. Les identifiants sautent de 191 à 265 : la séquence avance avec les tests `db` (transactions annulées) et les `ON CONFLICT DO NOTHING`.
+
+### 3 nouveaux résumés
+
+```text
+#284 | The Verge – IA | securite
+title_fr : Un hackeur a pénétré John Deere et SharkNinja grâce à une armée d'agents d'IA
+summary  : Un hackeur a compromis plus de 100 sites web en utilisant une armée d'agents d'IA, selon une enquête de la firme de sécurité Norforge.
+           Les attaques ont visé des entreprises comme John Deere, SharkNinja et Cummins, avec des intrusions réussies en moins de 24 heures.
+           Norforge a découvert ces attaques via l'exploitation d'une plateforme open-source appelée Cairn, utilisée pour orchestrer les cyberattaques via des agents d'IA.
+
+#283 | arXiv cs.CL | modeles
+title_fr : Attention par passage initial : une nouvelle approche pour améliorer l'attention dans les modèles de langage
+summary  : Le texte présente First Passage Attention (FPA), une méthode qui améliore l'attention softmax en utilisant des portes d'oubli, en se basant sur les extrêmes du chemin plutôt que sur la somme des contributions.
+           FPA inclut le Forgetting Transformer (FoX) comme cas particulier et permet la formation naturelle d'une pile de clés actives lorsqu'un champ scalaire et des niveaux suivent un même parcours appris.
+           Des expérimentations synthétiques montrent que FPA converge vers les ensembles cibles, alors que les bases softmax et FoX échouent, et FPA atteint une récupération parfaite des clés à 8 fois la longueur d'entraînement avec une compression du cache clé-valeur à 25 %.
+
+#282 | arXiv cs.CL | outils-dev
+title_fr : Explorer séparément, adopter sélectivement : utilisation guidée par l'exécution d'outils sur de grandes bibliothèques d'outils
+summary  : Une nouvelle approche nommée BRIA est présentée pour aider les agents basés sur des modèles de langage à sélectionner efficacement les outils pertinents parmi des bibliothèques composées de milliers d'outils.
+           BRIA isole les investigations des candidats dans des branches séparées, permettant à chaque branche d'explorer et d'exécuter des outils indépendamment avant de choisir les résultats utiles pour la trajectoire principale.
+           Les tests montrent que BRIA égale ou dépasse les meilleures bases de recherche existantes, avec une amélioration significative sur le benchmark MCP-Atlas.
+```
+
+### Deuxième collecte, lancée juste après
+
+Même commande, enchaînée sans attente — 46 s au total, code de sortie 0. Le verrou consultatif, libéré à la fin de la première, ne bloque pas la seconde (pas de « collecte déjà en cours »).
+
+```text
+[source] Google DeepMind : 5 entrées (suivi, 7 derniers jours), 0 nouvelles
+[source] Hugging Face Blog : 8 entrées (suivi, 7 derniers jours), 0 nouvelles
+[source] arXiv cs.AI : 344 entrées (suivi, 7 derniers jours), 10 nouvelles
+[source] arXiv cs.CL : 226 entrées (suivi, 7 derniers jours), 10 nouvelles
+[source] Hacker News (IA, 100 points) : 20 entrées (suivi, 7 derniers jours), 0 nouvelles
+[source] The Verge – IA : 10 entrées (suivi, 7 derniers jours), 0 nouvelles
+[source] MIT Technology Review – IA : 4 entrées (suivi, 7 derniers jours), 0 nouvelles
+[source] Simon Willison : 18 entrées (suivi, 7 derniers jours), 0 nouvelles
+[source] ActuIA : 9 entrées (suivi, 7 derniers jours), 0 nouvelles
+[source] Le Monde Informatique – IA : 4 entrées (suivi, 7 derniers jours), 0 nouvelles
+[llm] 20 article(s) à résumer
+…
+=== Bilan de la collecte ===
+Sources : 10 OK, 0 en erreur
+Nouveaux articles : 20
+Entrées ignorées (malformées) : 0
+Résumés : 20
+Échecs : 0
+Durée : 44 s
+```
+
+Aucun doublon : hors arXiv, 0 nouvelle entrée (l'article The Verge de la première collecte n'est pas réinséré). Les 20 nouveaux articles arXiv sont des entrées encore inconnues de la fenêtre de 7 jours (344 et 226 entrées, plafond 10 par passage), pas des doublons. Base après passage : 171 articles (160 `summarized`, 11 `failed`), 171 `normalized_url` distinctes, 0 couple (source, titre) en double.
+
+### `worker-cron`
+
+`docker compose logs worker-cron | tail` (conteneur `running`, 0 redémarrage) :
+
+```text
+level=warning msg="process reaping disabled, not pid 1"
+level=info msg="read crontab: /tmp/crontab"
+level=info msg="crontab is valid"
+Collecte planifiée : '0 6 * * *' (fuseau Europe/Paris)
+level=info msg="reaping dead processes"
+level=info msg="read crontab: /tmp/crontab"
+```
+
+Arrêt : `docker compose down` (volumes conservés).
