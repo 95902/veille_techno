@@ -97,13 +97,14 @@ services:
 
   worker-py:
     build: ./worker
-    # Hors du `docker compose up` par défaut (profil tools). Lancé à la demande (puis par cron) :
-    #   docker compose run --rm worker-py python -m veille_worker.smoke
+    image: veille_techno-worker
+    # Hors du `docker compose up` par défaut (profil tools). Lancé à la demande :
+    #   docker compose run --rm worker-py python -m veille_worker.collect
     profiles: ["tools"]
     restart: "no"
     # Liste explicite : le worker ne reçoit ni le mot de passe superutilisateur, ni celui de
     # veille_app, ni APP_KEY.
-    environment:
+    environment: &worker-env
       VLLM_MODEL: ${VLLM_MODEL}
       VLLM_BASE_URL: http://vllm:8000/v1
       DB_HOST: postgres
@@ -111,11 +112,31 @@ services:
       DB_DATABASE: ${POSTGRES_DB}
       DB_USERNAME: veille_worker
       WORKER_DB_PASSWORD: ${WORKER_DB_PASSWORD}
-    depends_on:
+    depends_on: &worker-depends
       postgres:
         condition: service_healthy
       vllm:
         condition: service_healthy
+
+  worker-cron:
+    # Même image que worker-py ; supercronic lance la collecte selon COLLECT_SCHEDULE
+    # (défaut chaque jour à 6 h, heure de Paris). Rien n'est lancé au démarrage.
+    build: ./worker
+    image: veille_techno-worker
+    restart: unless-stopped
+    environment:
+      <<: *worker-env
+      TZ: ${COLLECT_TZ:-Europe/Paris}
+      COLLECT_SCHEDULE: ${COLLECT_SCHEDULE:-0 6 * * *}
+    command:
+      - sh
+      - -c
+      - >-
+        sed "s|^@COLLECT_SCHEDULE@|$$COLLECT_SCHEDULE|" /app/crontab > /tmp/crontab
+        && supercronic -test /tmp/crontab
+        && echo "Collecte planifiée : '$$COLLECT_SCHEDULE' (fuseau $$TZ)"
+        && exec supercronic -passthrough-logs /tmp/crontab
+    depends_on: *worker-depends
 
 volumes:
   postgres_data:
