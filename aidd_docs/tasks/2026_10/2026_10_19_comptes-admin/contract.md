@@ -10,7 +10,7 @@ Réserver le back-office Filament aux admins, permettre de créer le premier adm
 - `User` implémente `FilamentUser` : `canAccessPanel` renvoie `true` seulement pour un admin.
 - Commande `php artisan veille:make-admin` : demande nom, e-mail et mot de passe au clavier (mot de passe masqué et confirmé), crée l'admin avec e-mail vérifié, ou promeut un compte existant de même e-mail.
 - Ressource Filament `Users` : liste, création, édition (nom, e-mail, `is_admin`), suppression.
-  - À la création : pas de champ mot de passe ; mot de passe aléatoire inutilisable, e-mail marqué vérifié, envoi du lien Laravel de définition du mot de passe (notification de réinitialisation). Avec `MAIL_MAILER=log`, le lien est écrit dans le log.
+  - À la création : pas de champ mot de passe ; mot de passe aléatoire inutilisable, e-mail marqué vérifié, envoi d'un e-mail d'invitation dédié en français (« votre compte a été créé, définissez votre mot de passe ») portant le lien du broker de réinitialisation ; « Renvoyer le lien » envoie ce même e-mail. Avec `MAIL_MAILER=log`, le lien est écrit dans le log.
   - Garde-fous : un admin ne peut pas se supprimer ni se retirer le rôle admin ; le dernier admin ne peut être ni supprimé ni rétrogradé.
 
 ## Hors périmètre
@@ -30,4 +30,5 @@ Pages de lecture, configuration SMTP réelle, statut « désactivé », rôles s
 
 - `is_admin` booléen : deux profils pour ~10 utilisateurs, pas de paquet de permissions.
 - Premier admin par commande interactive : aucun mot de passe dans un fichier ni dans l'historique du shell.
+- E-mail d'invitation dédié (amendement 2026-10-19) : la notification de réinitialisation standard laissait croire à une demande du collaborateur.
 - Lien de définition du mot de passe plutôt qu'un mot de passe transmis par l'admin ; e-mail vérifié d'office car l'admin se porte garant de l'adresse.
