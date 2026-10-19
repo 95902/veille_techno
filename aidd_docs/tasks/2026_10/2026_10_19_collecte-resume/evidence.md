@@ -190,15 +190,19 @@ arXiv cs.AI: 344 entrées dans la fenêtre, 321 inconnues (plafond 10)
 arXiv cs.CL: 226 entrées dans la fenêtre, 202 inconnues (plafond 10)
 ```
 
-Les 99 articles hors fenêtre déjà insérés (`id > 111`, `status = 'pending'`, `published_at < now() - interval '7 days'`) sont restés en base : le worker n'a pas le droit DELETE et leur suppression n'a pas été faite.
+Les 99 articles hors fenêtre déjà insérés (`id > 111`, `status = 'pending'`, `published_at < now() - interval '7 days'`) n'ont pas pu être supprimés par le worker (pas de droit DELETE). Ils ont été supprimés le 2026-10-19 par l'orchestrateur, avec l'accord explicite de l'utilisateur : `DELETE` exécuté en `veille_app` avec les critères `id > 111 AND status = 'pending' AND published_at < now() - interval '7 days'`, 99 lignes. Base relue ensuite : 130 articles (99 `summarized`, 11 `failed`, 20 `pending`).
 
 ## 6. Gates
 
+Relancés le 2026-10-19 après les corrections de la revue r-69a1.
+
 | Commande | Résultat |
 | -------- | -------- |
-| `pint --test` | PASS (102 fichiers) |
+| `pint --test` | PASS (103 fichiers) |
 | `npm run lint` | 0 avertissement, 0 erreur |
 | `uv run ruff check .` | All checks passed |
-| `pest` | 111 tests, 506 assertions, PASS |
-| `uv run pytest` (vLLM démarré) | 63 passed (dont 2 `slow` sur vLLM réel) |
+| `pest` | 112 tests, 509 assertions, PASS |
+| `uv run pytest -m "not slow"` (sans base) | 106 passed, 9 skipped (`db`) |
+| `uv run pytest -m db` (Postgres de Compose, `veille_worker`) | 9 passed, aucune ligne laissée en base |
+| `uv run pytest` (vLLM démarré) | non relancé (vLLM arrêté) ; dernier passage : 63 passed dont 2 `slow` |
 | `npm run build` | OK |
