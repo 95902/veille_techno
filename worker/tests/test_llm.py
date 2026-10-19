@@ -2,7 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from openai import APIConnectionError
+from openai import APIConnectionError, NotFoundError
 
 from veille_worker.config import Settings
 from veille_worker.llm import LLMUnavailableError, summarize_fr
@@ -41,4 +41,15 @@ def test_connection_error_becomes_explicit_exception():
     client.chat.completions.create.side_effect = APIConnectionError(request=MagicMock())
 
     with pytest.raises(LLMUnavailableError, match="vLLM injoignable"):
+        summarize_fr("x", settings=SETTINGS, client=client)
+
+
+def test_api_status_error_becomes_explicit_exception():
+    response = MagicMock(status_code=404)
+    client = MagicMock()
+    client.chat.completions.create.side_effect = NotFoundError(
+        "The model `test-model` does not exist.", response=response, body=None
+    )
+
+    with pytest.raises(LLMUnavailableError, match="erreur pour le modèle test-model"):
         summarize_fr("x", settings=SETTINGS, client=client)
